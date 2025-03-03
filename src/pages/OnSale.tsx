@@ -83,14 +83,11 @@ export const OnSale = () => {
                 </Link>
                 <button
                   onClick={() => addToCart({
-                    id: product.id,
-                    name: product.name,
-                    description: product.description,
-                    price: product.price,
-                    category_id: product.category,
-                    image_url: 'https://placehold.co/400x300?text=GPU',
-                    stock: product.stock,
-                    created_at: new Date().toISOString()
+                    ...product,
+                    badge: product.badge || null,
+                    sale: product.sale || null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
                   })}
                   disabled={!user || product.stock < 1}
                   className={`flex-1 px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white ${

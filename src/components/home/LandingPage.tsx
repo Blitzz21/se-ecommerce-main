@@ -109,14 +109,11 @@ export const LandingPage = () => {
                 <p className="text-xl font-bold mb-2">${product.price}</p>
                 <button
                   onClick={() => addToCart({
-                    id: product.id,
-                    name: product.name,
-                    description: product.description,
-                    price: product.price,
-                    category_id: product.category,
-                    image_url: 'https://placehold.co/400x300?text=GPU',
-                    stock: 1,
-                    created_at: new Date().toISOString()
+                    ...product,
+                    badge: product.badge || null,
+                    sale: product.sale || null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
                   })}
                   className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
                 >
