@@ -7,10 +7,10 @@ export const NewArrivals = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">
           New Arrivals
         </h1>
-        <p className="text-lg text-gray-600 dark:text-gray-300">
+        <p className="text-lg text-gray-600">
           Check out our latest GPU additions
         </p>
       </div>
@@ -19,14 +19,14 @@ export const NewArrivals = () => {
         {newProducts.map((product) => (
           <div 
             key={product.id}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:scale-[1.02]"
+            className="bg-white rounded-lg shadow overflow-hidden transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:scale-[1.02]"
           >
             {/* New Badge */}
             <div className="relative">
               <img 
                 src="https://placehold.co/400x300?text=GPU" 
                 alt={product.name}
-                className="w-full h-48 object-contain bg-gray-100 dark:bg-gray-700 p-4"
+                className="w-full h-48 object-contain bg-gray-100 p-4"
               />
               <div className="absolute top-4 right-4 bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
                 NEW
@@ -34,13 +34,13 @@ export const NewArrivals = () => {
             </div>
 
             <div className="p-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">
                 {product.name}
               </h2>
               
               {/* Brand & Model */}
               <div className="flex items-center mb-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-sm text-gray-600">
                   {product.brand} • {product.model}
                 </span>
               </div>
@@ -55,20 +55,20 @@ export const NewArrivals = () => {
                     ★
                   </span>
                 ))}
-                <span className="text-gray-600 dark:text-gray-400 text-sm ml-2">
+                <span className="text-gray-600 text-sm ml-2">
                   ({product.reviews})
                 </span>
               </div>
 
               {/* Specs Preview */}
-              <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+              <div className="mb-4 text-sm text-gray-600">
                 <div>Memory: {product.specs.memory} {product.specs.memoryType}</div>
                 <div>Boost Clock: {product.specs.boostClock}</div>
               </div>
 
               {/* Price */}
               <div className="flex items-baseline mb-4">
-                <span className="text-xl font-bold text-gray-900 dark:text-white">
+                <span className="text-xl font-bold text-gray-900">
                   ${product.price.toFixed(2)}
                 </span>
                 {product.sale?.active && (
@@ -87,7 +87,7 @@ export const NewArrivals = () => {
               <div className="mb-4">
                 <div className="flex items-center">
                   <div className={`h-2.5 w-2.5 rounded-full ${product.stock > 0 ? 'bg-green-500' : 'bg-red-500'} mr-2`}></div>
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                  <span className="text-sm text-gray-600">
                     {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
                   </span>
                 </div>
@@ -119,7 +119,7 @@ export const NewArrivals = () => {
       {/* Empty State */}
       {newProducts.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-gray-600">
             No new products available at the moment. Check back soon!
           </p>
         </div>
