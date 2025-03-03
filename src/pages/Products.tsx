@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useSupabaseQuery } from '../hooks/useSupabase'
-import ProductGrid from '../components/products/ProductGrid'
 import { supabase } from '../lib/supabase.ts'
 import { Squares2X2Icon as ViewGridIcon, ListBulletIcon as ViewListIcon } from '@heroicons/react/24/outline'
 import { Product } from '../data/products'
+import ProductCard from '../components/products/ProductCard'
 
 type ViewMode = 'grid' | 'list'
 
@@ -86,7 +86,20 @@ const Products = () => {
           </button>
         </div>
       </div>
-      <ProductGrid products={products} viewMode={viewMode} />
+      <div className={`grid ${
+        viewMode === 'grid' 
+          ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+          : 'grid-cols-1'
+      } gap-6`}>
+        {products.map((product) => (
+          <ProductCard
+            imageUrl={product.image}
+            key={product.id}
+            {...product}
+            viewMode={viewMode}
+          />
+        ))}
+      </div>
     </div>
   )
 }

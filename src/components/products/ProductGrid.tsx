@@ -3,15 +3,15 @@ import { Product } from '../../data/products'
 import { useSearchParams } from 'react-router-dom'
 import { useCart } from '../../contexts/CartContext'
 import { useAuth } from '../../contexts/AuthContext'
+import ProductCard from './ProductCard'
 
 interface ProductGridProps {
   products: Product[]
-  viewMode: 'grid' | 'list'
 }
 
 const categories = ['All', 'Gaming', 'Workstation', 'Mining', 'AI'] as const
 
-const ProductGrid = ({ products, viewMode }: ProductGridProps) => {
+const ProductGrid = ({ products }: ProductGridProps) => {
   const { addToCart } = useCart()
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -77,82 +77,19 @@ const ProductGrid = ({ products, viewMode }: ProductGridProps) => {
       </div>
 
       {/* Product Grid */}
-      <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1'} gap-6`}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredProducts.map((product) => (
-          <div 
+          <ProductCard
             key={product.id}
-            className="bg-white rounded-lg shadow-md overflow-hidden transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:scale-[1.02]"
-          >
-            <div className="relative">
-              <img 
-                src="https://placehold.co/400x300?text=GPU" 
-                alt={product.name}
-                className="w-full h-48 object-contain bg-gray-50 p-4"
-              />
-              {product.badge && (
-                <span className="absolute top-4 right-4 px-2 py-1 text-xs font-semibold text-white bg-blue-500 rounded-full">
-                  {product.badge}
-                </span>
-              )}
-            </div>
-            <div className="p-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-2">
-                {product.name}
-              </h2>
-              <div className="flex items-center mb-2">
-                {Array(5).fill(0).map((_, i) => (
-                  <span 
-                    key={i} 
-                    className={`${i < Math.floor(product.rating) ? 'text-yellow-400' : 'text-gray-300'}`}
-                  >
-                    ★
-                  </span>
-                ))}
-                <span className="text-gray-600 text-sm ml-2">
-                  ({product.reviews})
-                </span>
-              </div>
-              <p className="text-gray-600 text-sm mb-4">
-                {product.description}
-              </p>
-              <div className="flex justify-between items-center">
-                <div className="flex flex-col">
-                  <span className="text-xl font-bold text-gray-900">
-                    ${product.price.toFixed(2)}
-                  </span>
-                  {product.sale?.active && (
-                    <span className="text-sm text-red-500 line-through">
-                      ${product.sale.oldPrice.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-                <button 
-                  onClick={() => addToCart({
-                    ...product,
-                    badge: product.badge || null,
-                    sale: product.sale || null,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                  })}
-                  disabled={!user || product.stock < 1}
-                  className={`px-4 py-2 rounded text-white transition-colors ${
-                    !user 
-                      ? 'bg-gray-400 cursor-not-allowed' 
-                      : product.stock < 1 
-                        ? 'bg-red-400 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
-                >
-                  {!user 
-                    ? 'Login to Buy' 
-                    : product.stock < 1 
-                      ? 'Out of Stock' 
-                      : 'Add to Cart'
-                  }
-                </button>
-              </div>
-            </div>
-          </div>
+            id={product.id}
+            name={product.name}
+            price={product.price}
+            imageUrl={product.image}
+            description={product.description}
+            badge={product.badge}
+            sale={product.sale}
+            addToCart={addToCart}
+          />
         ))}
       </div>
 
@@ -168,4 +105,4 @@ const ProductGrid = ({ products, viewMode }: ProductGridProps) => {
   )
 }
 
-export default ProductGrid 
+export default ProductGrid
