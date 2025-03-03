@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { HiMenu, HiX, HiShoppingCart, HiUser, HiSearch, HiChevronDown } from 'react-icons/hi'
+import { useCart } from '../../contexts/CartContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [isShopOpen, setIsShopOpen] = useState(false)
+  const { cartItems } = useCart()
+  const { user, signOut } = useAuth()
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -91,16 +95,46 @@ export const Navbar = () => {
               <HiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             </div>
             
-            <Link to="/cart" className="text-gray-700 hover:text-blue-600 transition-colors relative">
+            <Link 
+              to={user ? "/cart" : "/login"} 
+              className="text-gray-700 hover:text-blue-600 transition-colors relative"
+              onClick={(e) => {
+                if (!user) {
+                  e.preventDefault();
+                  // You can add a toast notification here or handle the login prompt differently
+                  alert("Please log in to view your cart");
+                }
+              }}
+            >
               <HiShoppingCart className="h-6 w-6" />
-              <span className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs font-medium">
-                0
-              </span>
+              {cartItems.length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs font-medium">
+                  {cartItems.length}
+                </span>
+              )}
             </Link>
             
-            <Link to="/account" className="text-gray-700 hover:text-blue-600 transition-colors">
-              <HiUser className="h-6 w-6" />
-            </Link>
+            {user ? (
+              <Link 
+                to="/account" 
+                className="text-gray-700 hover:text-blue-600 transition-colors"
+              >
+                <HiUser className="h-6 w-6" />
+              </Link>
+            ) : (
+              <Link 
+                to="/login" 
+                className="text-gray-700 hover:text-blue-600 transition-colors"
+              >
+                <HiUser className="h-6 w-6" />
+              </Link>
+            )}
+
+            {user && (
+              <button onClick={signOut} className="text-gray-700 hover:text-blue-600 transition-colors">
+                Sign Out
+              </button>
+            )}
           </div>
 
           {/* Mobile menu button */}

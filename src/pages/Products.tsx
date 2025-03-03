@@ -1,33 +1,52 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSupabaseQuery } from '../hooks/useSupabase'
 import ProductGrid from '../components/products/ProductGrid'
 import { supabase } from '../lib/supabase.ts'
 import { Squares2X2Icon as ViewGridIcon, ListBulletIcon as ViewListIcon } from '@heroicons/react/24/outline'
+import { Database } from '../types/supabase'
 
 type ViewMode = 'grid' | 'list'
+
+type Product = Database['public']['Tables']['products']['Row']
 
 const Products = () => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const { data: categories } = useSupabaseQuery(async () => {
     const { data, error } = await supabase.from('categories').select('*').order('name')
     return { data: data || [], error } // Ensure data is an array, defaulting to an empty array if null
   })
 
-  const { data: products, loading, error } = useSupabaseQuery(async () => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false })
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true)
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false })
 
-    return { data: data || [], error } // Ensure data is an array, defaulting to an empty array if null
-  }, [selectedCategory])
+        if (error) throw error
+        setProducts(data || [])
+      } catch (err) {
+        console.error('Error fetching products:', err)
+        setError('Failed to fetch products')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProducts()
+  }, [])
 
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     )
   }
@@ -69,7 +88,7 @@ const Products = () => {
           </button>
         </div>
       </div>
-      <ProductGrid products={products || []} viewMode={viewMode} />
+      <ProductGrid products={products} viewMode={viewMode} />
     </div>
   )
 }

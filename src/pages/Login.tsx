@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -14,6 +15,7 @@ const Login = () => {
   const [isLogin, setIsLogin] = useState(true)
   const navigate = useNavigate()
   const location = useLocation()
+  const { signIn, signUp } = useAuth()
 
   const from = location.state?.from?.pathname || '/'
 
@@ -70,43 +72,29 @@ const Login = () => {
       setLoading(true)
       
       if (isLogin) {
-        // Sign in with Supabase
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         })
         
         if (error) throw error
-        if (!data.user) throw new Error('No user returned from Supabase')
-        
+        if (data?.user) {
+          navigate(from, { replace: true })
+        }
       } else {
-        // Sign up with Supabase
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
         })
         
         if (error) throw error
-        if (!data.user) throw new Error('No user returned from Supabase')
-        
-        // Create a profile record in the profiles table
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: data.user.id,
-              email: email,
-              created_at: new Date().toISOString(),
-            }
-          ])
-        
-        if (profileError) throw profileError
+        if (data?.user) {
+          setError('Account created successfully! Please check your email for verification.')
+        }
       }
-      
-      navigate(from, { replace: true })
     } catch (err: any) {
       console.error('Authentication error:', err)
-      setError(err.message || (isLogin ? 'Failed to sign in' : 'Failed to create account'))
+      setError(err.message || (isLogin ? 'Invalid credentials' : 'Failed to create account'))
     } finally {
       setLoading(false)
     }

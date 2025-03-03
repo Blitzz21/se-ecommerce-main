@@ -2,18 +2,27 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { Database } from '../types/supabase';
-import { v4 as uuidv4 } from 'uuid';
 
+// Define the Product type based on your Supabase database
 type Product = Database['public']['Tables']['products']['Row'];
-type CartItem = Database['public']['Tables']['cart_items']['Row'];
+
+interface CartItem {
+  id: string;
+  user_id: string;
+  product_id: string;
+  product_name: string;
+  price: number;
+  quantity: number;
+}
 
 interface CartContextType {
   cartItems: CartItem[];
   addToCart: (product: Product) => Promise<void>;
-  removeFromCart: (productId: string) => Promise<void>;
-  updateQuantity: (productId: string, quantity: number) => Promise<void>;
+  removeFromCart: (itemId: string) => Promise<void>;
+  updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   loading: boolean;
   error: string | null;
+  totalPrice: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -21,32 +30,39 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [totalPrice, setTotalPrice] = useState(0);
 
-  // Fetch cart items whenever user changes
   useEffect(() => {
     if (user) {
       fetchCartItems();
     } else {
       setCartItems([]);
-      setLoading(false);
     }
   }, [user]);
 
+  useEffect(() => {
+    const total = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    setTotalPrice(total);
+  }, [cartItems]);
+
   const fetchCartItems = async () => {
+    if (!user) return;
+
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('cart_items')
         .select('*')
-        .eq('user_id', user?.id);
+        .eq('user_id', user.id)
+        .returns<CartItem[]>();
 
       if (error) throw error;
       setCartItems(data || []);
-      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error fetching cart:', err);
+      setError('Failed to fetch cart items');
     } finally {
       setLoading(false);
     }
@@ -54,85 +70,59 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addToCart = async (product: Product) => {
     if (!user) {
-      console.log('No user logged in');
       setError('Please log in to add items to cart');
       return;
     }
 
     try {
-      console.log('Adding to cart:', product);
       setLoading(true);
       
-      // Ensure product has a valid UUID
-      const productId = product.id || uuidv4();
-      
       // Check if item already exists in cart
-      const existingItem = cartItems.find(item => item.product_id === productId);
-      console.log('Existing item:', existingItem);
+      const { data: existingItems, error: checkError } = await supabase
+        .from('cart_items')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('product_id', product.id)
+        .returns<CartItem[]>();
 
+      if (checkError) throw checkError;
+
+      const existingItem = existingItems?.[0];
+      
       if (existingItem) {
         // Update quantity if item exists
-        const newQuantity = existingItem.quantity + 1;
-        console.log('Updating quantity to:', newQuantity);
-        
-        // Check stock
-        if (newQuantity > product.stock) {
-          console.log('Not enough stock');
-          setError(`Only ${product.stock} items available in stock`);
-          return;
-        }
-
-        const { error } = await supabase
+        const { error: updateError } = await supabase
           .from('cart_items')
-          .update({ quantity: newQuantity })
+          .update({ quantity: existingItem.quantity + 1 })
           .eq('id', existingItem.id);
 
-        if (error) {
-          console.error('Error updating cart:', error);
-          throw error;
-        }
-
-        setCartItems(prev =>
-          prev.map(item =>
-            item.id === existingItem.id
-              ? { ...item, quantity: newQuantity }
-              : item
-          )
-        );
-        console.log('Successfully updated quantity');
+        if (updateError) throw updateError;
       } else {
         // Add new item if it doesn't exist
-        console.log('Adding new item to cart');
-        const { data, error } = await supabase
+        const { error: insertError } = await supabase
           .from('cart_items')
-          .insert({
-            id: uuidv4(),
+          .insert([{
             user_id: user.id,
-            product_id: productId,
+            product_id: product.id,
+            product_name: product.name,
+            price: product.price,
             quantity: 1
-          })
-          .select()
-          .single();
+          }]);
 
-        if (error) {
-          console.error('Error adding to cart:', error);
-          throw error;
-        }
-        if (data) {
-          console.log('Successfully added item:', data);
-          setCartItems(prev => [...prev, data]);
-        }
+        if (insertError) throw insertError;
       }
-      setError(null);
+
+      // Refresh cart items
+      await fetchCartItems();
     } catch (err) {
-      console.error('Cart operation failed:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error adding to cart:', err);
+      setError('Failed to add item to cart');
     } finally {
       setLoading(false);
     }
   };
 
-  const removeFromCart = async (productId: string) => {
+  const removeFromCart = async (itemId: string) => {
     if (!user) return;
 
     try {
@@ -140,21 +130,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase
         .from('cart_items')
         .delete()
-        .eq('user_id', user.id)
-        .eq('product_id', productId);
+        .eq('id', itemId);
 
       if (error) throw error;
-
-      setCartItems(prev => prev.filter(item => item.product_id !== productId));
-      setError(null);
+      await fetchCartItems();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error removing from cart:', err);
+      setError('Failed to remove item from cart');
     } finally {
       setLoading(false);
     }
   };
 
-  const updateQuantity = async (productId: string, quantity: number) => {
+  const updateQuantity = async (itemId: string, quantity: number) => {
     if (!user || quantity < 1) return;
 
     try {
@@ -162,19 +150,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase
         .from('cart_items')
         .update({ quantity })
-        .eq('user_id', user.id)
-        .eq('product_id', productId);
+        .eq('id', itemId);
 
       if (error) throw error;
-
-      setCartItems(prev =>
-        prev.map(item =>
-          item.product_id === productId ? { ...item, quantity } : item
-        )
-      );
-      setError(null);
+      await fetchCartItems();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error updating quantity:', err);
+      setError('Failed to update quantity');
     } finally {
       setLoading(false);
     }
@@ -189,6 +171,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         updateQuantity,
         loading,
         error,
+        totalPrice,
       }}
     >
       {children}
@@ -202,4 +185,4 @@ export function useCart() {
     throw new Error('useCart must be used within a CartProvider');
   }
   return context;
-} 
+}

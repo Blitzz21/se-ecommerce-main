@@ -29,24 +29,86 @@ export interface Database {
         Row: {
           id: string
           name: string
-          description: string
+          brand: 'NVIDIA' | 'AMD' | 'Intel'
+          model: string
           price: number
-          category_id: string
-          image_url: string
-          model_url?: string
+          category: 'Gaming' | 'Workstation' | 'Mining' | 'AI'
+          image: string | null
+          description: string | null
+          specs: {
+            memory: string
+            memoryType: string
+            coreClock: string
+            boostClock: string
+            tdp: string
+          }
           stock: number
+          rating: number
+          reviews: number
+          badge: 'NEW' | 'SALE' | 'LIMITED' | 'BEST SELLER' | null
+          sale: {
+            active: boolean
+            percentage: number
+            oldPrice: number
+          } | null
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           name: string
-          description: string
+          brand: 'NVIDIA' | 'AMD' | 'Intel'
+          model: string
           price: number
-          category_id: string
-          image_url: string
-          model_url?: string
+          category: 'Gaming' | 'Workstation' | 'Mining' | 'AI'
+          image?: string | null
+          description?: string | null
+          specs: {
+            memory: string
+            memoryType: string
+            coreClock: string
+            boostClock: string
+            tdp: string
+          }
           stock: number
+          rating: number
+          reviews: number
+          badge?: 'NEW' | 'SALE' | 'LIMITED' | 'BEST SELLER' | null
+          sale?: {
+            active: boolean
+            percentage: number
+            oldPrice: number
+          } | null
           created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          brand?: 'NVIDIA' | 'AMD' | 'Intel'
+          model?: string
+          price?: number
+          category?: 'Gaming' | 'Workstation' | 'Mining' | 'AI'
+          image?: string | null
+          description?: string | null
+          specs?: {
+            memory: string
+            memoryType: string
+            coreClock: string
+            boostClock: string
+            tdp: string
+          }
+          stock?: number
+          rating?: number
+          reviews?: number
+          badge?: 'NEW' | 'SALE' | 'LIMITED' | 'BEST SELLER' | null
+          sale?: {
+            active: boolean
+            percentage: number
+            oldPrice: number
+          } | null
+          created_at?: string
+          updated_at?: string
         }
       }
       categories: {
@@ -68,17 +130,44 @@ export interface Database {
           id: string
           user_id: string
           product_id: string
+          product_name: string
+          price: number
           quantity: number
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
           product_id: string
+          product_name: string
+          price: number
           quantity: number
           created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          product_id?: string
+          product_name?: string
+          price?: number
+          quantity?: number
+          created_at?: string
+          updated_at?: string
         }
       }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      gpu_brand: 'NVIDIA' | 'AMD' | 'Intel'
+      gpu_category: 'Gaming' | 'Workstation' | 'Mining' | 'AI'
+      badge_type: 'NEW' | 'SALE' | 'LIMITED' | 'BEST SELLER'
     }
   }
 } 

@@ -2,51 +2,49 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Link } from 'react-router-dom';
+import { useCart } from '../contexts/CartContext';
+import { Link, useNavigate } from 'react-router-dom';
 
-type CartItem = Database['public']['Tables']['cart_items']['Row'];
 type Product = Database['public']['Tables']['products']['Row'];
 
 const Cart = () => {
   const { user } = useAuth();
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const { cartItems, loading, error, removeFromCart, updateQuantity } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchCartItems = async () => {
-      if (!user) return;
+    if (!user) {
+      navigate('/login', { replace: true });
+      return;
+    }
 
-      const { data, error } = await supabase
-        .from('cart_items')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setCartItems(data || []);
-      }
-      setLoading(false);
-    };
-
-    fetchCartItems();
-  }, [user]);
-
-  useEffect(() => {
     const fetchProducts = async () => {
-      const { data, error } = await supabase.from('products').select('*');
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setProducts(data || []);
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .in(
+          'id', 
+          cartItems.map(item => item.product_id)
+        );
+      
+      if (!error && data) {
+        setProducts(data);
       }
     };
 
-    fetchProducts();
-  }, []);
+    if (cartItems.length > 0) {
+      fetchProducts();
+    }
+  }, [user, navigate, cartItems]);
+
+  // Move this after the useEffect
+  if (!user) return null;
+  if (loading) return (
+    <div className="flex justify-center items-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+  );
 
   const handleQuantityChange = async (itemId: string, productId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -57,38 +55,15 @@ const Cart = () => {
 
     // Check if requested quantity is available
     if (newQuantity > product.stock) {
-      setError(`Only ${product.stock} items available in stock`);
+      alert(`Only ${product.stock} items available in stock`);
       return;
     }
 
-    const { error } = await supabase
-      .from('cart_items')
-      .update({ quantity: newQuantity })
-      .eq('id', itemId);
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setCartItems(prev =>
-        prev.map(item =>
-          item.id === itemId ? { ...item, quantity: newQuantity } : item
-        )
-      );
-      setError(null);
-    }
+    await updateQuantity(itemId, newQuantity);
   };
 
   const handleRemoveItem = async (itemId: string) => {
-    const { error } = await supabase
-      .from('cart_items')
-      .delete()
-      .eq('id', itemId);
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setCartItems(prev => prev.filter(item => item.id !== itemId));
-    }
+    await removeFromCart(itemId);
   };
 
   const calculateTotal = () => {
@@ -97,12 +72,6 @@ const Cart = () => {
       return total + (product?.price || 0) * item.quantity;
     }, 0);
   };
-
-  if (loading) return (
-    <div className="flex justify-center items-center min-h-screen">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-    </div>
-  );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

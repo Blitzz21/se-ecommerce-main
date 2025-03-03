@@ -127,16 +127,19 @@ const ProductGrid = ({ products, viewMode }: ProductGridProps) => {
                   )}
                 </div>
                 <button 
-                  onClick={() => addToCart({
-                    id: product.id,
-                    name: product.name,
-                    description: product.description,
-                    price: product.price,
-                    category_id: product.category,
-                    image_url: 'https://placehold.co/400x300?text=GPU',
-                    stock: product.stock,
-                    created_at: new Date().toISOString()
-                  })}
+                  onClick={() => {
+                    if (user) {
+                      addToCart({
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        stock: product.stock,
+                        category_id: product.category,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                      });
+                    }
+                  }}
                   disabled={!user || product.stock < 1}
                   className={`px-4 py-2 rounded text-white transition-colors ${
                     !user 

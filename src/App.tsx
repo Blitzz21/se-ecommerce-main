@@ -23,45 +23,45 @@ import TermsOfService from './pages/info/TermsOfService'
 
 function App() {
   return (
-      <AuthProvider>
-        <CartProvider>
-          <Router>
-            <Routes>
-              <Route path="/" element={<Layout />}>
-                <Route index element={<LandingPage />} />
-                <Route path="products" element={<ProductGrid products={products} viewMode="grid" />} />
-                <Route path="products/:id" element={<ProductDetails />} />
-                <Route path="on-sale" element={<OnSale />} />
-                <Route path="new-arrivals" element={<NewArrivals />} />
-                <Route path="login" element={<Login />} />
-                <Route path="cart" element={
-                  <ProtectedRoute>
-                    <Cart />
-                  </ProtectedRoute>
-                } />
-                <Route path="checkout" element={
-                  <ProtectedRoute>
-                    <Checkout />
-                  </ProtectedRoute>
-                } />
-                <Route path="dashboard" element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } />
-                {/* Info Pages */}
-                <Route path="about" element={<AboutUs />} />
-                <Route path="contact" element={<ContactUs />} />
-                <Route path="faq" element={<FAQs />} />
-                <Route path="shipping" element={<ShippingPolicy />} />
-                <Route path="returns" element={<ReturnPolicy />} />
-                <Route path="terms" element={<TermsOfService />} />
-                <Route path="*" element={<NotFound />} />
-              </Route>
-            </Routes>
-          </Router>
-        </CartProvider>
-      </AuthProvider>
+    <AuthProvider>
+      <CartProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<LandingPage />} />
+              <Route path="products" element={<ProductGrid products={products} viewMode="grid" />} />
+              <Route path="products/:id" element={<ProductDetails />} />
+              <Route path="on-sale" element={<OnSale />} />
+              <Route path="new-arrivals" element={<NewArrivals />} />
+              <Route path="login" element={<Login />} />
+              <Route path="cart" element={
+                <ProtectedRoute>
+                  <Cart />
+                </ProtectedRoute>
+              } />
+              <Route path="checkout" element={
+                <ProtectedRoute>
+                  <Checkout />
+                </ProtectedRoute>
+              } />
+              <Route path="dashboard" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
+              {/* Info Pages */}
+              <Route path="about" element={<AboutUs />} />
+              <Route path="contact" element={<ContactUs />} />
+              <Route path="faq" element={<FAQs />} />
+              <Route path="shipping" element={<ShippingPolicy />} />
+              <Route path="returns" element={<ReturnPolicy />} />
+              <Route path="terms" element={<TermsOfService />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </Router>
+      </CartProvider>
+    </AuthProvider>
   )
 }
 
