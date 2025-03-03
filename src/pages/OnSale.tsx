@@ -1,12 +1,10 @@
 import { getSaleProducts } from '../data/products'
 import ProductCard from '../components/products/ProductCard'
 import { useCart } from '../contexts/CartContext'
-import { useAuth } from '../contexts/AuthContext'
 
 export const OnSale = () => {
   const saleProducts = getSaleProducts()
   const { addToCart } = useCart()
-  const { user } = useAuth()
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

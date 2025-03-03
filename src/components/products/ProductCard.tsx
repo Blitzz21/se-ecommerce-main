@@ -16,6 +16,7 @@ interface ProductCardProps {
   }
   addToCart: (product: any) => void
   disabled?: boolean
+  viewMode?: 'grid' | 'list'
 }
 
 const ProductCard = ({ id, name, price, imageUrl, description, badge, sale, addToCart, disabled = false }: ProductCardProps) => {

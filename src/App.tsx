@@ -29,7 +29,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={<LandingPage />} />
-              <Route path="products" element={<ProductGrid products={products} viewMode="grid" />} />
+              <Route path="products" element={<ProductGrid products={products} />} />
               <Route path="products/:id" element={<ProductDetails />} />
               <Route path="on-sale" element={<OnSale />} />
               <Route path="new-arrivals" element={<NewArrivals />} />

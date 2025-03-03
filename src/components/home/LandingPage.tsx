@@ -71,7 +71,6 @@ export const LandingPage = () => {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
-  const [showFeatures, setShowFeatures] = useState(false)
   const featuresRef = useRef<HTMLDivElement>(null)
   const isFeaturesInView = useInView(featuresRef, { once: true, amount: 0.1 })
 
@@ -102,7 +101,6 @@ export const LandingPage = () => {
 
   // Scroll to features section
   const scrollToFeatures = () => {
-    setShowFeatures(true)
     if (featuresRef.current) {
       featuresRef.current.scrollIntoView({ behavior: 'smooth' })
     }

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.ts'
 import { Squares2X2Icon as ViewGridIcon, ListBulletIcon as ViewListIcon } from '@heroicons/react/24/outline'
 import { Product } from '../data/products'
 import ProductCard from '../components/products/ProductCard'
+import { useCart } from '../contexts/CartContext'
 
 type ViewMode = 'grid' | 'list'
 
@@ -13,6 +14,7 @@ const Products = () => {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { addToCart } = useCart()
 
   const { data: categories } = useSupabaseQuery(async () => {
     const { data, error } = await supabase.from('categories').select('*').order('name')
@@ -96,6 +98,7 @@ const Products = () => {
             imageUrl={product.image}
             key={product.id}
             {...product}
+            addToCart={addToCart}
             viewMode={viewMode}
           />
         ))}

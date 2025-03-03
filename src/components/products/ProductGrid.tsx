@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Product } from '../../data/products'
 import { useSearchParams } from 'react-router-dom'
 import { useCart } from '../../contexts/CartContext'
-import { useAuth } from '../../contexts/AuthContext'
 import ProductCard from './ProductCard'
 
 interface ProductGridProps {
@@ -13,7 +12,6 @@ const categories = ['All', 'Gaming', 'Workstation', 'Mining', 'AI'] as const
 
 const ProductGrid = ({ products }: ProductGridProps) => {
   const { addToCart } = useCart()
-  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedCategory, setSelectedCategory] = useState<string>(
     searchParams.get('category') || 'All'
