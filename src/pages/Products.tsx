@@ -3,11 +3,9 @@ import { useSupabaseQuery } from '../hooks/useSupabase'
 import ProductGrid from '../components/products/ProductGrid'
 import { supabase } from '../lib/supabase.ts'
 import { Squares2X2Icon as ViewGridIcon, ListBulletIcon as ViewListIcon } from '@heroicons/react/24/outline'
-import { Database } from '../types/supabase'
+import { Product } from '../data/products'
 
 type ViewMode = 'grid' | 'list'
-
-type Product = Database['public']['Tables']['products']['Row']
 
 const Products = () => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)

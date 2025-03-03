@@ -127,19 +127,13 @@ const ProductGrid = ({ products, viewMode }: ProductGridProps) => {
                   )}
                 </div>
                 <button 
-                  onClick={() => {
-                    if (user) {
-                      addToCart({
-                        id: product.id,
-                        name: product.name,
-                        price: product.price,
-                        stock: product.stock,
-                        category_id: product.category,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                      });
-                    }
-                  }}
+                  onClick={() => addToCart({
+                    ...product,
+                    badge: product.badge || null,
+                    sale: product.sale || null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  })}
                   disabled={!user || product.stock < 1}
                   className={`px-4 py-2 rounded text-white transition-colors ${
                     !user 

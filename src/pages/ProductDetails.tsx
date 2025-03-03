@@ -65,7 +65,7 @@ const ProductDetails = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <img
-            src={product.image_url}
+            src={product.image || ''}
             alt={product.name}
             className="w-full rounded-lg"
           />

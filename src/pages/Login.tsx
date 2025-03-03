@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -15,7 +14,6 @@ const Login = () => {
   const [isLogin, setIsLogin] = useState(true)
   const navigate = useNavigate()
   const location = useLocation()
-  const { signIn, signUp } = useAuth()
 
   const from = location.state?.from?.pathname || '/'
 
