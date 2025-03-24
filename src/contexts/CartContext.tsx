@@ -229,7 +229,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           quantity: newItem.quantity,
           user_id: newItem.user_id,
           product_name: newItem.product_name,
-          price: newItem.price
+          price: newItem.price,
+          image: newItem.image // Add image to database entry
         };
         
         const { error } = await supabase.from('cart_items').insert([dbItem]);

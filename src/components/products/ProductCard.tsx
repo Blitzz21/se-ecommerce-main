@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { HiShoppingCart } from 'react-icons/hi'
 import { motion } from 'framer-motion'
 import { useCurrency } from '../../contexts/CurrencyContext'
+import { GpuImage } from '../../utils/ImageHelper'
 
 interface ProductCardProps {
   id: string
@@ -39,6 +40,9 @@ const ProductCard = ({
 }: ProductCardProps) => {
   const { format } = useCurrency();
 
+  // Get the display image with priority order: image prop > imageUrl prop > placeholder
+  const displayImage = image || imageUrl || "https://placehold.co/300x200?text=GPU";
+
   // List view 
   if (viewMode === 'list') {
     return (
@@ -56,8 +60,8 @@ const ProductCard = ({
                   {sale.percentage}% OFF
                 </span>
               )}
-              <img
-                src={image || imageUrl || "https://placehold.co/300x200?text=GPU"}
+              <GpuImage
+                src={displayImage}
                 alt={name}
                 className="w-full h-48 object-contain p-4"
               />
@@ -127,8 +131,8 @@ const ProductCard = ({
                 {sale.percentage}% OFF
               </span>
             )}
-            <img
-              src={image || imageUrl || "https://placehold.co/300x200?text=GPU"}
+            <GpuImage
+              src={displayImage}
               alt={name}
               className="w-full h-48 object-contain p-4"
             />

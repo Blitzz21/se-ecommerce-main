@@ -41,6 +41,11 @@ export const Navbar = () => {
 
           {/* Desktop Navigation - Always visible */}
           <div className="hidden md:flex items-center space-x-8">
+            {/* Add SearchBar for desktop view */}
+            <div className="w-64">
+              <SearchBar products={products} />
+            </div>
+            
             <div className="relative group">
               <button
                 onClick={() => setIsShopOpen(!isShopOpen)}
@@ -130,7 +135,6 @@ export const Navbar = () => {
                       className="flex items-center space-x-2 hover:text-green-500 transition-colors"
                     >
                       <HiUser className="h-6 w-6" />
-                      <span className="hidden md:inline">{user.email}</span>
                       <HiChevronDown className={`h-4 w-4 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
                     </button>
 

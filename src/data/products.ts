@@ -482,18 +482,69 @@ export const getProductsByBrand = (brand: Product['brand']) => {
 }
 
 // Helper function to get featured products (best sellers or new arrivals)
-export const getFeaturedProducts = () => {
-  return products.filter(product => product.badge === 'BEST SELLER' || product.badge === 'NEW')
+export const getFeaturedProducts = (): Product[] => {
+  const featured = products.filter(product => 
+    product.badge === 'BEST SELLER' || product.badge === 'NEW'
+  ).slice(0, 8);
+
+  // Ensure all featured products have proper image paths
+  return featured.map(product => {
+    if (!product.image) {
+      // Assign default image based on brand
+      if (product.brand === 'NVIDIA') {
+        return { ...product, image: '../assets/gpu/rtx-4090.png' };
+      } else if (product.brand === 'AMD') {
+        return { ...product, image: '../assets/gpu/rx-7900-xtx.png' };
+      } else if (product.brand === 'Intel') {
+        return { ...product, image: '../assets/gpu/arc-a770.png' };
+      }
+    }
+    return product;
+  });
 }
 
 // Add helper function to get sale products
-export const getSaleProducts = () => {
-  return products.filter(product => product.sale?.active)
+export const getSaleProducts = (): Product[] => {
+  const onSale = products.filter(product => 
+    product.sale && product.sale.active
+  ).slice(0, 8);
+  
+  // Ensure all sale products have proper image paths
+  return onSale.map(product => {
+    if (!product.image) {
+      // Assign default image based on brand
+      if (product.brand === 'NVIDIA') {
+        return { ...product, image: '../assets/gpu/rtx-4090.png' };
+      } else if (product.brand === 'AMD') {
+        return { ...product, image: '../assets/gpu/rx-7900-xtx.png' };
+      } else if (product.brand === 'Intel') {
+        return { ...product, image: '../assets/gpu/arc-a770.png' };
+      }
+    }
+    return product;
+  });
 }
 
 // Add this helper function
-export const getTopSellingProducts = () => {
-  return products.filter(product => product.reviews > 100).sort((a, b) => b.rating - a.rating).slice(0, 8)
+export const getTopSellingProducts = (): Product[] => {
+  const topSellers = products.filter(product => 
+    product.rating >= 4.5 && product.reviews > 50
+  ).sort((a, b) => b.reviews - a.reviews).slice(0, 8);
+
+  // Ensure all top sellers have proper image paths
+  return topSellers.map(product => {
+    if (!product.image) {
+      // Assign default image based on brand
+      if (product.brand === 'NVIDIA') {
+        return { ...product, image: '../assets/gpu/rtx-4090.png' };
+      } else if (product.brand === 'AMD') {
+        return { ...product, image: '../assets/gpu/rx-7900-xtx.png' };
+      } else if (product.brand === 'Intel') {
+        return { ...product, image: '../assets/gpu/arc-a770.png' };
+      }
+    }
+    return product;
+  });
 }
 
 // Add these helper functions

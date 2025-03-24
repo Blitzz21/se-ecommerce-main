@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast'
 import { useCart } from '../contexts/CartContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { supabase } from '../lib/supabase'
+import { GpuImage } from '../utils/ImageHelper'
 
 export interface DatabaseProduct {
   id: string
@@ -94,14 +95,23 @@ const ProductDetails = () => {
   const handleAddToCart = async () => {
     if (product) {
       try {
-        // Add to cart with the user-selected quantity
+        // Add to cart with the user-selected quantity but only needed fields
         await addToCart({
-          ...product,
+          id: product.id,
+          name: product.name,
           brand: product.brand as any,
+          model: product.model,
+          price: product.price,
           category: product.category as any,
+          image: product.image,
+          description: product.description,
+          specs: product.specs,
+          stock: product.stock,
+          rating: product.rating || 0,
+          reviews: product.reviews || 0,
           badge: product.badge as any,
           sale: product.sale as any,
-          quantity: quantity // Pass the selected quantity
+          quantity: quantity
         });
         
         toast.success(`${product.name} added to cart`);
@@ -158,11 +168,10 @@ const ProductDetails = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <div className="bg-white p-4 rounded-lg shadow-md overflow-hidden">
-            <img
+            <GpuImage
               src={product.image || "https://placehold.co/600x400?text=No+Image"}
               alt={product.name}
-              className="w-full h-auto object-contain"
-              style={{ maxHeight: '400px' }}
+              className="w-full h-auto object-contain max-h-[400px]"
             />
           </div>
         </div>

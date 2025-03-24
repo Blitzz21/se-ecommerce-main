@@ -1,11 +1,248 @@
-import { getSaleProducts } from '../data/products'
+import { useState, useEffect } from 'react'
 import { useCart } from '../contexts/CartContext'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { GpuImage } from '../utils/ImageHelper'
+import { supabase } from '../lib/supabase'
+import { useCurrency } from '../contexts/CurrencyContext'
+import { Product } from '../data/products'
 
 export const OnSale = () => {
-  const saleProducts = getSaleProducts()
+  const [saleProducts, setSaleProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
   const { addToCart } = useCart()
+  const { format } = useCurrency()
+
+  useEffect(() => {
+    const fetchSaleProducts = async () => {
+      try {
+        setLoading(true)
+        
+        // Fetch products with active sales
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('sale.active', true)
+          .order('price', { ascending: true })
+        
+        if (error) {
+          console.error('Error in initial sale query:', error)
+          
+          // Fallback: Get products with SALE badge if the JSON query fails
+          const { data: badgeData, error: badgeError } = await supabase
+            .from('products')
+            .select('*')
+            .eq('badge', 'SALE')
+          
+          if (badgeError) throw badgeError
+          
+          // Ensure each product has sale data
+          const formattedProducts = badgeData?.map(product => {
+            // If product has no sale data, create default values
+            if (!product.sale || !product.sale.active) {
+              product.sale = {
+                active: true,
+                percentage: 15,
+                oldPrice: product.price * 1.15 // 15% higher than current price
+              }
+            }
+            
+            // If image is missing, invalid, or needs to be fixed, update it based on name/model
+            if (!product.image || !product.image.includes('gpu')) {
+              const name = product.name.toUpperCase();
+              const model = (product.model || '').toUpperCase();
+              
+              // Check NVIDIA products
+              if (name.includes('NVIDIA') || name.includes('RTX') || name.includes('GTX')) {
+                if (name.includes('4090') || model.includes('4090')) {
+                  product.image = '../assets/gpu/rtx-4090.png';
+                } else if (name.includes('4080 SUPER') || model.includes('4080 SUPER')) {
+                  product.image = '../assets/gpu/rtx-4080-super.png';
+                } else if (name.includes('4080') || model.includes('4080')) {
+                  product.image = '../assets/gpu/rtx-4080.png';
+                } else if (name.includes('4070') || model.includes('4070')) {
+                  product.image = '../assets/gpu/rtx-4070-ti.png';
+                } else if (name.includes('6000 ADA') || model.includes('6000 ADA')) {
+                  product.image = '../assets/gpu/rtx-6000-ada.png';
+                } else if (name.includes('6000') || model.includes('6000')) {
+                  product.image = '../assets/gpu/rtx-6000.png';
+                } else if (name.includes('5000') || model.includes('5000')) {
+                  product.image = '../assets/gpu/rtx-5000.png';
+                } else if (name.includes('A100') || model.includes('A100')) {
+                  product.image = '../assets/gpu/a100.png';
+                } else if (name.includes('H100') || model.includes('H100')) {
+                  product.image = '../assets/gpu/h100.png';
+                } else if (name.includes('CMP 170HX') || model.includes('CMP 170HX')) {
+                  product.image = '../assets/gpu/cmp-170hx.png';
+                } else if (name.includes('CMP 50HX') || model.includes('CMP 50HX')) {
+                  product.image = '../assets/gpu/cmp-50hx.png';
+                } else {
+                  // Default NVIDIA image
+                  product.image = '../assets/gpu/rtx-4090.png';
+                }
+              } 
+              // Check AMD products
+              else if (name.includes('AMD') || name.includes('RADEON') || name.includes('RX')) {
+                if (name.includes('7900 XTX') || model.includes('7900 XTX')) {
+                  product.image = '../assets/gpu/rx-7900-xtx.png';
+                } else if (name.includes('7800 XT') || model.includes('7800 XT')) {
+                  product.image = '../assets/gpu/rx-7800-xt.png';
+                } else if (name.includes('7600') || model.includes('7600')) {
+                  product.image = '../assets/gpu/rx-7600.png';
+                } else if (name.includes('W7900X') || model.includes('W7900X')) {
+                  product.image = '../assets/gpu/w7900x.png';
+                } else if (name.includes('W7900') || model.includes('W7900')) {
+                  product.image = '../assets/gpu/radeon-pro-w7900.png';
+                } else if (name.includes('MI250X') || model.includes('MI250X')) {
+                  product.image = '../assets/gpu/mi250x.png';
+                } else {
+                  // Default AMD image
+                  product.image = '../assets/gpu/rx-7900-xtx.png';
+                }
+              } 
+              // Check Intel products
+              else if (name.includes('INTEL') || name.includes('ARC')) {
+                if (name.includes('A770 LIMITED') || model.includes('A770 LIMITED')) {
+                  product.image = '../assets/gpu/intel-arc-a770.png';
+                } else if (name.includes('A770') || model.includes('A770')) {
+                  product.image = '../assets/gpu/arc-a770.png';
+                } else {
+                  // Default Intel image
+                  product.image = '../assets/gpu/arc-a770.png';
+                }
+              }
+              // Default for unknown brands
+              else {
+                product.image = '../assets/gpu/rtx-4090.png';
+              }
+            }
+            
+            // Ensure GPU image has correct path format
+            if (product.image && !product.image.startsWith('../assets/gpu/') && product.image.includes('gpu')) {
+              product.image = '../assets/' + product.image.substring(product.image.indexOf('gpu'));
+            }
+            
+            console.log(`Sale product ${product.name} image path: ${product.image}`);
+            
+            return {
+              ...product,
+              badge: 'SALE',
+              brand: product.brand as any,
+              category: product.category as any
+            }
+          }) || []
+          
+          setSaleProducts(formattedProducts)
+          return
+        }
+        
+        // Process results from the successful JSON query
+        const formattedProducts = data?.map(product => {
+          // If image is missing, invalid, or needs to be fixed, update it based on name/model
+          if (!product.image || !product.image.includes('gpu')) {
+            const name = product.name.toUpperCase();
+            const model = (product.model || '').toUpperCase();
+            
+            // Check NVIDIA products
+            if (name.includes('NVIDIA') || name.includes('RTX') || name.includes('GTX')) {
+              if (name.includes('4090') || model.includes('4090')) {
+                product.image = '../assets/gpu/rtx-4090.png';
+              } else if (name.includes('4080 SUPER') || model.includes('4080 SUPER')) {
+                product.image = '../assets/gpu/rtx-4080-super.png';
+              } else if (name.includes('4080') || model.includes('4080')) {
+                product.image = '../assets/gpu/rtx-4080.png';
+              } else if (name.includes('4070') || model.includes('4070')) {
+                product.image = '../assets/gpu/rtx-4070-ti.png';
+              } else if (name.includes('6000 ADA') || model.includes('6000 ADA')) {
+                product.image = '../assets/gpu/rtx-6000-ada.png';
+              } else if (name.includes('6000') || model.includes('6000')) {
+                product.image = '../assets/gpu/rtx-6000.png';
+              } else if (name.includes('5000') || model.includes('5000')) {
+                product.image = '../assets/gpu/rtx-5000.png';
+              } else if (name.includes('A100') || model.includes('A100')) {
+                product.image = '../assets/gpu/a100.png';
+              } else if (name.includes('H100') || model.includes('H100')) {
+                product.image = '../assets/gpu/h100.png';
+              } else if (name.includes('CMP 170HX') || model.includes('CMP 170HX')) {
+                product.image = '../assets/gpu/cmp-170hx.png';
+              } else if (name.includes('CMP 50HX') || model.includes('CMP 50HX')) {
+                product.image = '../assets/gpu/cmp-50hx.png';
+              } else {
+                // Default NVIDIA image
+                product.image = '../assets/gpu/rtx-4090.png';
+              }
+            } 
+            // Check AMD products
+            else if (name.includes('AMD') || name.includes('RADEON') || name.includes('RX')) {
+              if (name.includes('7900 XTX') || model.includes('7900 XTX')) {
+                product.image = '../assets/gpu/rx-7900-xtx.png';
+              } else if (name.includes('7800 XT') || model.includes('7800 XT')) {
+                product.image = '../assets/gpu/rx-7800-xt.png';
+              } else if (name.includes('7600') || model.includes('7600')) {
+                product.image = '../assets/gpu/rx-7600.png';
+              } else if (name.includes('W7900X') || model.includes('W7900X')) {
+                product.image = '../assets/gpu/w7900x.png';
+              } else if (name.includes('W7900') || model.includes('W7900')) {
+                product.image = '../assets/gpu/radeon-pro-w7900.png';
+              } else if (name.includes('MI250X') || model.includes('MI250X')) {
+                product.image = '../assets/gpu/mi250x.png';
+              } else {
+                // Default AMD image
+                product.image = '../assets/gpu/rx-7900-xtx.png';
+              }
+            } 
+            // Check Intel products
+            else if (name.includes('INTEL') || name.includes('ARC')) {
+              if (name.includes('A770 LIMITED') || model.includes('A770 LIMITED')) {
+                product.image = '../assets/gpu/intel-arc-a770.png';
+              } else if (name.includes('A770') || model.includes('A770')) {
+                product.image = '../assets/gpu/arc-a770.png';
+              } else {
+                // Default Intel image
+                product.image = '../assets/gpu/arc-a770.png';
+              }
+            }
+            // Default for unknown brands
+            else {
+              product.image = '../assets/gpu/rtx-4090.png';
+            }
+          }
+          
+          // Ensure GPU image has correct path format
+          if (product.image && !product.image.startsWith('../assets/gpu/') && product.image.includes('gpu')) {
+            product.image = '../assets/' + product.image.substring(product.image.indexOf('gpu'));
+          }
+          
+          console.log(`Sale product ${product.name} image path: ${product.image}`);
+          
+          return {
+            ...product,
+            badge: product.badge || 'SALE',
+            brand: product.brand as any,
+            category: product.category as any
+          }
+        }) || []
+        
+        console.log('Fetched sale products:', formattedProducts);
+        setSaleProducts(formattedProducts)
+      } catch (error) {
+        console.error('Error fetching sale products:', error)
+        setSaleProducts([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchSaleProducts()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -33,7 +270,7 @@ export const OnSale = () => {
               >
                 {/* Product Image */}
                 <div className="relative overflow-hidden">
-                  <img
+                  <GpuImage
                     src={product.image || "https://placehold.co/400x300?text=GPU"}
                     alt={product.name}
                     className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-500"
@@ -60,9 +297,9 @@ export const OnSale = () => {
                       <div className="flex flex-col">
                         {product.sale?.active && (
                           <>
-                            <span className="text-xl font-bold">${product.price.toFixed(2)}</span>
+                            <span className="text-xl font-bold">{format(product.price)}</span>
                             <span className="text-sm text-gray-500 line-through">
-                              ${product.sale.oldPrice.toFixed(2)}
+                              {format(product.sale.oldPrice)}
                             </span>
                           </>
                         )}

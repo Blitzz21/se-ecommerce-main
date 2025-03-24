@@ -8,6 +8,14 @@ import { hero1, hero2, hero3 } from '../../assets/heroSlides/index'
 import { ai, gaming, mining, workstation } from '../../assets/workloads/index'
 import { motion, useInView } from 'framer-motion'
 import { useCurrency } from '../../contexts/CurrencyContext'
+import { supabase } from '../../lib/supabase'
+
+// Import GPU images directly
+import rtx4090 from '../../assets/gpu/rtx-4090.png';
+import rtx4080 from '../../assets/gpu/rtx-4080.png';
+import rx7900xtx from '../../assets/gpu/rx-7900-xtx.png';
+import rx7800xt from '../../assets/gpu/rx-7800-xt.png';
+import arcA770 from '../../assets/gpu/arc-a770.png';
 
 const workloads = [
   {
@@ -64,15 +72,16 @@ const brandLogos = [
 export const LandingPage = () => {
   const navigate = useNavigate()
   const { addToCart } = useCart()
-  const topSellers = getTopSellingProducts()
-  const newArrivalsProducts = getFeaturedProducts().filter(product => product.badge === 'NEW')
-  const onSaleProducts = getSaleProducts()
+  const [topSellers, setTopSellers] = useState<Product[]>([])
+  const [newArrivalsProducts, setNewArrivalsProducts] = useState<Product[]>([])
+  const [onSaleProducts, setOnSaleProducts] = useState<Product[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
   const featuresRef = useRef<HTMLDivElement>(null)
   const isFeaturesInView = useInView(featuresRef, { once: true, amount: 0.1 })
   const { format } = useCurrency()
+  const [loading, setLoading] = useState(true)
 
   // Handle automatic slideshow
   useEffect(() => {
@@ -95,6 +104,84 @@ export const LandingPage = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
+  // Load products with proper image paths
+  useEffect(() => {
+    const loadProducts = async () => {
+      setLoading(true)
+      
+      // Load top sellers from local data
+      const loadedTopSellers = getTopSellingProducts().map(product => {
+        return { ...product, image: getImageForProduct(product) };
+      });
+      
+      setTopSellers(loadedTopSellers)
+      
+      // Try to fetch new products from database first
+      try {
+        const { data: dbNewProducts, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('badge', 'NEW')
+          .order('created_at', { ascending: false })
+          .limit(4)
+          
+        if (!error && dbNewProducts && dbNewProducts.length > 0) {
+          // Format database products
+          const formattedNewProducts = dbNewProducts.map(product => {
+            return {
+              id: product.id,
+              name: product.name,
+              brand: product.brand as any,
+              model: product.model,
+              price: product.price,
+              category: product.category as any,
+              image: getImageForProduct(product),
+              description: product.description,
+              specs: product.specs,
+              stock: product.stock,
+              rating: product.rating || 0,
+              reviews: product.reviews || 0,
+              badge: product.badge as any,
+              sale: product.sale as any
+            };
+          });
+          
+          console.log('Formatted products with images:', formattedNewProducts);
+          setNewArrivalsProducts(formattedNewProducts)
+        } else {
+          // Fallback to local data if no database products
+          const localNewArrivals = getFeaturedProducts()
+            .filter(product => product.badge === 'NEW')
+            .map(product => {
+              return { ...product, image: getImageForProduct(product) };
+            });
+            
+          setNewArrivalsProducts(localNewArrivals)
+        }
+      } catch (err) {
+        console.error('Error fetching new products:', err)
+        // Fallback to local data
+        const localNewArrivals = getFeaturedProducts()
+          .filter(product => product.badge === 'NEW')
+          .map(product => {
+            return { ...product, image: getImageForProduct(product) };
+          });
+          
+        setNewArrivalsProducts(localNewArrivals)
+      }
+      
+      // Load on sale products
+      const loadedSaleProducts = getSaleProducts().map(product => {
+        return { ...product, image: getImageForProduct(product) };
+      });
+      
+      setOnSaleProducts(loadedSaleProducts)
+      setLoading(false)
+    }
+    
+    loadProducts()
+  }, [])
+
   const handleWorkloadClick = (category: Product['category']) => {
     navigate(`/products?category=${category}`)
   }
@@ -106,114 +193,156 @@ export const LandingPage = () => {
     }
   }
 
-  const ProductSection = ({ title, products, link }: { 
+  // Helper function to assign default image based on brand
+  const getImageForProduct = (product: Product): string => {
+    // If product already has a valid image that's imported, use it
+    if (product.image && 
+        (product.image.startsWith('../assets/gpu/') || 
+         product.image.startsWith('/assets/gpu/') || 
+         product.image.includes('gpu/'))) {
+      return product.image;
+    }
+    
+    // Otherwise assign a default based on brand
+    const brandName = typeof product.brand === 'string' ? product.brand.toUpperCase() : String(product.brand).toUpperCase();
+    
+    if (brandName === 'NVIDIA' || brandName.includes('NVIDIA')) {
+      return product.model?.includes('4090') 
+        ? rtx4090
+        : product.model?.includes('4080') 
+          ? rtx4080
+          : rtx4090;
+    } else if (brandName === 'AMD' || brandName.includes('AMD')) {
+      return product.model?.includes('7900') 
+        ? rx7900xtx
+        : product.model?.includes('7800') 
+          ? rx7800xt
+          : rx7900xtx;
+    } else if (brandName === 'INTEL' || brandName.includes('INTEL')) {
+      return arcA770;
+    }
+    return rtx4090; // Default fallback
+  }
+
+  const ProductSection = ({ title, products, link, loading }: { 
     title: string, 
     products: Product[], 
-    link: string 
+    link: string,
+    loading: boolean
   }) => {
-    const handleAddToCart = async (product: Product) => {
-      try {
-        await addToCart({
-          ...product,
-          badge: product.badge,
-          sale: product.sale
-        });
-      } catch (error: any) {
-        if (error.message === 'AUTH_REQUIRED') {
-          // Redirect to login page with return path
-          navigate('/login', { 
-            state: { from: window.location.pathname }
-          });
-        }
-      }
-    };
-
     return (
       <section className="py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
-            <Link to={link} className="text-green-600 hover:text-green-800">
-              View All
-            </Link>
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              {title}
+            </h2>
+            <p className="text-lg text-gray-600">
+              Check out our latest GPU additions
+            </p>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <div key={product.id} className="relative">
-                <Link 
-                  to={`/products/${product.id}`}
-                  className="block h-full"
-                >
-                  <motion.div 
-                    whileHover={{ y: -5 }}
-                    className="bg-white rounded-lg shadow-md h-full flex flex-col transition-all duration-300 hover:shadow-xl group"
-                  >
-                    <div className="relative">
-                      {product.badge && (
-                        <span className="absolute top-2 left-2 z-10 bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                          {product.badge}
-                        </span>
-                      )}
-                      {product.sale?.active && (
-                        <span className="absolute top-2 right-2 z-10 bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                          {product.sale.percentage}% OFF
-                        </span>
-                      )}
-                      <img
-                        src={product.image || "https://placehold.co/300x200?text=GPU"}
-                        alt={product.name}
-                        className="w-full h-48 object-contain p-4"
-                      />
-                    </div>
-                    
-                    <div className="p-4 flex flex-col flex-grow pb-16">
-                      <h3 className="text-lg font-semibold mb-1 group-hover:text-green-600 transition-colors">
-                        {product.name}
-                      </h3>
-                      <p className="text-gray-600 text-sm mb-4 flex-grow line-clamp-2">
-                        {product.description}
-                      </p>
-                      
-                      {/* Price and Stock */}
-                      <div className="mt-auto">
-                        <div className="flex justify-between items-center mb-3">
-                          <div className="flex flex-col">
-                            {product.sale?.active ? (
-                              <>
-                                <span className="text-xl font-bold">{format(product.price)}</span>
-                                <span className="text-sm text-gray-500 line-through">
-                                  {format(product.sale.oldPrice)}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-xl font-bold">{format(product.price)}</span>
-                            )}
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {products.map((product) => (
+                <div key={product.id} className="relative">
+                  <Link to={`/products/${product.id}`} className="block h-full">
+                    <motion.div 
+                      className="group bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-full transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+                      whileHover={{ 
+                        scale: 1.02,
+                        y: -4,
+                        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+                      }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      {/* Product Image */}
+                      <div className="relative overflow-hidden h-48 flex items-center justify-center p-4 bg-[#F5F6F6]">
+                        <img
+                          src={product.image || getImageForProduct(product)}
+                          alt={product.name}
+                          className="w-full h-full object-contain"
+                        />
+                        
+                        {/* Badge */}
+                        {product.badge && (
+                          <div className="absolute top-2 right-2 bg-green-500 text-white text-xs font-bold py-1 px-2 rounded-full">
+                            {product.badge}
                           </div>
-                          <span className={`text-sm font-medium ${product.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {product.stock > 0 ? `In Stock` : 'Out of Stock'}
-                          </span>
+                        )}
+                        
+                        {/* Sale Badge */}
+                        {product.sale?.active && !product.badge && (
+                          <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold py-1 px-2 rounded-full">
+                            SALE {product.sale.percentage}%
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Product details */}
+                      <div className="p-4 flex flex-col flex-grow pb-16">
+                        <h3 className="text-lg font-semibold mb-1 group-hover:text-green-600 transition-colors">
+                          {product.name}
+                        </h3>
+                        <p className="text-gray-600 text-sm mb-4 flex-grow line-clamp-2">
+                          {product.description}
+                        </p>
+                        
+                        {/* Price and Stock */}
+                        <div className="mt-auto">
+                          <div className="flex justify-between items-center mb-3">
+                            <div className="flex flex-col">
+                              {product.sale?.active ? (
+                                <>
+                                  <span className="text-xl font-bold">{format(product.price)}</span>
+                                  <span className="text-sm text-gray-500 line-through">
+                                    {format(product.sale.oldPrice)}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-xl font-bold">{format(product.price)}</span>
+                              )}
+                            </div>
+                            <span className={`text-sm font-medium ${product.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {product.stock > 0 ? 'In Stock' : 'Out of Stock'}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                </Link>
-                
-                {product.stock > 0 && (
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleAddToCart(product);
-                    }}
-                    className="absolute bottom-4 right-4 bg-green-500 hover:bg-green-600 text-white rounded-full p-3 shadow-lg transform transition-transform hover:scale-110 z-10"
-                    aria-label="Add to cart"
-                  >
-                    <HiShoppingCart className="w-6 h-6" />
-                  </button>
-                )}
-              </div>
-            ))}
+                    </motion.div>
+                  </Link>
+                  
+                  {/* Add to Cart Button */}
+                  {product.stock > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        addToCart(product);
+                      }}
+                      className="absolute bottom-4 right-4 bg-green-500 hover:bg-green-600 text-white rounded-full p-3 shadow-lg transform transition-transform hover:scale-110 z-10"
+                      aria-label="Add to cart"
+                    >
+                      <HiShoppingCart className="w-6 h-6" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* View All Button */}
+          <div className="text-center mt-8">
+            <Link
+              to={link}
+              className="inline-block bg-green-500 text-white px-6 py-2 rounded-full hover:bg-green-600 transition-colors"
+            >
+              View All {title}
+            </Link>
           </div>
         </div>
       </section>
@@ -470,6 +599,7 @@ export const LandingPage = () => {
             title="TOP SELLERS" 
             products={topSellers} 
             link="/products?sort=best-selling" 
+            loading={loading}
           />
 
           {/* New Arrivals */}
@@ -477,6 +607,7 @@ export const LandingPage = () => {
             title="NEW ARRIVALS" 
             products={newArrivalsProducts} 
             link="/new-arrivals" 
+            loading={loading}
           />
 
           {/* On Sale */}
@@ -484,6 +615,7 @@ export const LandingPage = () => {
             title="ON SALE" 
             products={onSaleProducts} 
             link="/on-sale" 
+            loading={loading}
           />
 
           {/* Browse by Workload with enhanced visuals */}

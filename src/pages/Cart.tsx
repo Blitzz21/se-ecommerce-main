@@ -9,6 +9,7 @@ import { Helmet } from 'react-helmet-async';
 import OrderSummary from '../components/checkout/OrderSummary';
 import { useCurrency } from '../contexts/CurrencyContext';
 import EmptyState from '../components/EmptyState';
+import { GpuImage } from '../utils/ImageHelper';
 
 type DatabaseProduct = Database['public']['Tables']['products']['Row'];
 
@@ -156,11 +157,13 @@ const Cart = () => {
                   </div>
                   
                   <div className="flex-shrink-0 mr-4 mb-4 sm:mb-0">
-                    <img
-                      src={item.image || "https://placehold.co/300x200?text=GPU"}
-                      alt={item.product_name}
-                      className="w-24 h-24 object-cover rounded-md"
-                    />
+                    <div className="w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
+                      <GpuImage
+                        src={item.image || '../assets/gpu/rtx-4090.png'}
+                        alt={item.product_name}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
                   </div>
                   
                   <div className="flex-1">

@@ -6,6 +6,30 @@ import { Helmet } from 'react-helmet-async';
 import { HiArrowLeft, HiSave, HiTrash, HiUpload } from 'react-icons/hi';
 import { Product } from '../../data/products';
 import { initializeStorage } from '../../lib/dbInit';
+import { GpuImage } from '../../utils/ImageHelper';
+
+// GPU images from assets folder
+const gpuImages: Array<{name: string, path: string}> = [
+  { name: 'NVIDIA RTX 4090', path: '../assets/gpu/rtx-4090.png' },
+  { name: 'NVIDIA RTX 4080', path: '../assets/gpu/rtx-4080.png' },
+  { name: 'NVIDIA RTX 4080 Super', path: '../assets/gpu/rtx-4080-super.png' },
+  { name: 'NVIDIA RTX 4070 Ti', path: '../assets/gpu/rtx-4070-ti.png' },
+  { name: 'NVIDIA RTX 6000', path: '../assets/gpu/rtx-6000.png' },
+  { name: 'NVIDIA RTX 6000 Ada', path: '../assets/gpu/rtx-6000-ada.png' },
+  { name: 'NVIDIA RTX 5000', path: '../assets/gpu/rtx-5000.png' },
+  { name: 'NVIDIA A100', path: '../assets/gpu/a100.png' },
+  { name: 'NVIDIA H100', path: '../assets/gpu/h100.png' },
+  { name: 'NVIDIA CMP 170HX', path: '../assets/gpu/cmp-170hx.png' },
+  { name: 'NVIDIA CMP 50HX', path: '../assets/gpu/cmp-50hx.png' },
+  { name: 'AMD Radeon RX 7900 XTX', path: '../assets/gpu/rx-7900-xtx.png' },
+  { name: 'AMD Radeon RX 7800 XT', path: '../assets/gpu/rx-7800-xt.png' },
+  { name: 'AMD Radeon RX 7600', path: '../assets/gpu/rx-7600.png' },
+  { name: 'AMD Radeon PRO W7900', path: '../assets/gpu/radeon-pro-w7900.png' },
+  { name: 'AMD Radeon PRO W7900X', path: '../assets/gpu/w7900x.png' },
+  { name: 'AMD Instinct MI250X', path: '../assets/gpu/mi250x.png' },
+  { name: 'Intel Arc A770', path: '../assets/gpu/arc-a770.png' },
+  { name: 'Intel Arc A770 Limited Edition', path: '../assets/gpu/intel-arc-a770.png' }
+];
 
 const categories = ['Gaming', 'Workstation', 'Mining', 'AI'];
 const badges = ['NEW', 'SALE', 'LIMITED', 'BEST SELLER'];
@@ -19,6 +43,8 @@ const ProductForm = () => {
   const [submitting, setSubmitting] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedAssetImage, setSelectedAssetImage] = useState<string>('');
+  const [useAssetImage, setUseAssetImage] = useState<boolean>(false);
   
   // Form fields
   const [product, setProduct] = useState<Partial<Product>>({
@@ -73,6 +99,15 @@ const ProductForm = () => {
         setHasSale(data.sale?.active || false);
         if (data.image) {
           setImagePreview(data.image);
+          
+          // If the image is from our assets, mark it as an asset image
+          if (data.image.includes('assets/gpu/')) {
+            const matchingImage = gpuImages.find(img => data.image.includes(img.path.split('/').pop() || ''));
+            if (matchingImage) {
+              setSelectedAssetImage(matchingImage.path);
+              setUseAssetImage(true);
+            }
+          }
         }
       }
       
@@ -133,6 +168,7 @@ const ProductForm = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setImageFile(file);
+      setUseAssetImage(false);
       
       // Create a preview
       const reader = new FileReader();
@@ -142,8 +178,23 @@ const ProductForm = () => {
       reader.readAsDataURL(file);
     }
   };
+
+  const handleAssetImageSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedPath = e.target.value;
+    if (selectedPath) {
+      setSelectedAssetImage(selectedPath);
+      setUseAssetImage(true);
+      setImageFile(null);
+      setImagePreview(selectedPath);
+    }
+  };
   
   const uploadImage = async (productId: string): Promise<string | null> => {
+    // If using an asset image, return its path
+    if (useAssetImage && selectedAssetImage) {
+      return selectedAssetImage;
+    }
+    
     if (!imageFile) return product.image || null;
     
     try {
@@ -275,7 +326,7 @@ const ProductForm = () => {
       }
       
       // Upload image if one was selected
-      if (imageFile) {
+      if (imageFile || useAssetImage) {
         try {
           const imageUrl = await uploadImage(savedProductId);
           
@@ -528,7 +579,7 @@ const ProductForm = () => {
               <div className="w-full md:w-1/3">
                 <div className="h-48 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden">
                   {imagePreview ? (
-                    <img
+                    <GpuImage
                       src={imagePreview}
                       alt="Product preview"
                       className="h-full w-full object-contain"
@@ -540,8 +591,36 @@ const ProductForm = () => {
               </div>
               
               <div className="w-full md:w-2/3">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Select from GPU assets
+                  </label>
+                  <select
+                    value={selectedAssetImage}
+                    onChange={handleAssetImageSelect}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                  >
+                    <option value="">Select a GPU image</option>
+                    {gpuImages.map((image) => (
+                      <option key={image.path} value={image.path}>
+                        {image.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Choose from the pre-loaded GPU images in the assets folder
+                  </p>
+                </div>
+
+                <div className="mb-4">
+                  <div className="flex items-center mb-2">
+                    <span className="text-sm font-medium text-gray-700">Or</span>
+                    <div className="flex-grow border-t border-gray-200 mx-4"></div>
+                  </div>
+                </div>
+                
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Upload Image
+                  Upload custom image
                 </label>
                 <div className="mt-1 flex items-center">
                   <label
@@ -736,4 +815,4 @@ const ProductForm = () => {
   );
 };
 
-export default ProductForm; 
+export default ProductForm;

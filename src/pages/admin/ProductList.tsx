@@ -3,8 +3,56 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Helmet } from 'react-helmet-async';
-import { HiPlus, HiPencil, HiTrash, HiSearch, HiRefresh, HiOutlineChevronLeft, HiOutlineChevronRight } from 'react-icons/hi';
+import { HiPlus, HiPencil, HiTrash, HiSearch, HiRefresh, HiOutlineChevronLeft, HiOutlineChevronRight, HiPhotograph, HiDatabase } from 'react-icons/hi';
 import { Product } from '../../data/products';
+import { GpuImage } from '../../utils/ImageHelper';
+
+// Product image mapping with proper type
+const productImageMap: Record<string, string> = {
+  // NVIDIA
+  'NVIDIA GeForce RTX 4090': '../assets/gpu/rtx-4090.png',
+  'RTX 4090': '../assets/gpu/rtx-4090.png',
+  'NVIDIA GeForce RTX 4080 SUPER': '../assets/gpu/rtx-4080-super.png',
+  'RTX 4080 SUPER': '../assets/gpu/rtx-4080-super.png',
+  'NVIDIA GeForce RTX 4080': '../assets/gpu/rtx-4080.png',
+  'RTX 4080': '../assets/gpu/rtx-4080.png',
+  'NVIDIA GeForce RTX 4070 Ti SUPER': '../assets/gpu/rtx-4070-ti.png',
+  'RTX 4070 Ti SUPER': '../assets/gpu/rtx-4070-ti.png',
+  'NVIDIA RTX 6000 Ada Generation': '../assets/gpu/rtx-6000-ada.png',
+  'RTX 6000 Ada': '../assets/gpu/rtx-6000-ada.png',
+  'NVIDIA RTX 6000': '../assets/gpu/rtx-6000.png',
+  'RTX 6000': '../assets/gpu/rtx-6000.png',
+  'NVIDIA RTX 5000 Ada Generation': '../assets/gpu/rtx-5000.png',
+  'RTX 5000': '../assets/gpu/rtx-5000.png',
+  'NVIDIA A100': '../assets/gpu/a100.png',
+  'A100': '../assets/gpu/a100.png',
+  'NVIDIA H100': '../assets/gpu/h100.png',
+  'H100': '../assets/gpu/h100.png',
+  'NVIDIA CMP 170HX': '../assets/gpu/cmp-170hx.png',
+  'CMP 170HX': '../assets/gpu/cmp-170hx.png',
+  'NVIDIA CMP 50HX': '../assets/gpu/cmp-50hx.png',
+  'CMP 50HX': '../assets/gpu/cmp-50hx.png',
+  
+  // AMD
+  'AMD Radeon RX 7900 XTX': '../assets/gpu/rx-7900-xtx.png',
+  'RX 7900 XTX': '../assets/gpu/rx-7900-xtx.png',
+  'AMD Radeon RX 7800 XT': '../assets/gpu/rx-7800-xt.png',
+  'RX 7800 XT': '../assets/gpu/rx-7800-xt.png',
+  'AMD Radeon RX 7600': '../assets/gpu/rx-7600.png',
+  'RX 7600': '../assets/gpu/rx-7600.png',
+  'AMD Radeon PRO W7900': '../assets/gpu/radeon-pro-w7900.png',
+  'Radeon PRO W7900': '../assets/gpu/radeon-pro-w7900.png',
+  'AMD Radeon PRO W7900X': '../assets/gpu/w7900x.png',
+  'W7900X': '../assets/gpu/w7900x.png',
+  'AMD Instinct MI250X': '../assets/gpu/mi250x.png',
+  'MI250X': '../assets/gpu/mi250x.png',
+  
+  // Intel
+  'Intel Arc A770': '../assets/gpu/arc-a770.png',
+  'Arc A770': '../assets/gpu/arc-a770.png',
+  'Intel Arc A770 Limited Edition': '../assets/gpu/intel-arc-a770.png',
+  'Arc A770 LE': '../assets/gpu/intel-arc-a770.png',
+};
 
 const ProductList = () => {
   const navigate = useNavigate();
@@ -13,6 +61,8 @@ const ProductList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalProducts, setTotalProducts] = useState(0);
+  const [updatingImages, setUpdatingImages] = useState(false);
+  const [updatingDatabaseImages, setUpdatingDatabaseImages] = useState(false);
   const productsPerPage = 10;
 
   // Fetch products with pagination
@@ -93,6 +143,187 @@ const ProductList = () => {
   // Calculate pagination
   const totalPages = Math.ceil(totalProducts / productsPerPage);
 
+  // Update all product images
+  const updateAllProductImages = async () => {
+    const confirmed = window.confirm('This will update all product images to use the local GPU assets. Continue?');
+    
+    if (!confirmed) return;
+    
+    try {
+      setUpdatingImages(true);
+      toast.loading('Updating product images...', { id: 'updating-images' });
+      
+      // Get all products
+      const { data: allProducts, error } = await supabase
+        .from('products')
+        .select('*');
+      
+      if (error) throw error;
+      
+      let updatedCount = 0;
+      const updates = [];
+      
+      // Loop through products and find matching images
+      for (const product of allProducts || []) {
+        // Try to find a matching image based on product name or model
+        let imagePath = null;
+        
+        // Check full product name first
+        if (productImageMap[product.name]) {
+          imagePath = productImageMap[product.name];
+        } 
+        // Then check model
+        else if (productImageMap[product.model]) {
+          imagePath = productImageMap[product.model];
+        }
+        // Fallback to brand + searching
+        else {
+          // Find any key in the map that contains this product's name
+          const matchingKey = Object.keys(productImageMap).find(key => 
+            product.name.includes(key) || key.includes(product.name)
+          );
+          
+          if (matchingKey) {
+            imagePath = productImageMap[matchingKey];
+          }
+        }
+        
+        if (imagePath && product.image !== imagePath) {
+          updates.push(
+            supabase
+              .from('products')
+              .update({ image: imagePath })
+              .eq('id', product.id)
+              .then(({ error }) => {
+                if (!error) updatedCount++;
+                return { id: product.id, success: !error };
+              })
+          );
+        }
+      }
+      
+      // Wait for all updates to complete
+      await Promise.all(updates);
+      
+      // Update local state with new images
+      fetchProducts(currentPage, searchTerm);
+      
+      toast.dismiss('updating-images');
+      toast.success(`Successfully updated ${updatedCount} product images`);
+    } catch (error) {
+      console.error('Error updating product images:', error);
+      toast.error('Failed to update product images');
+    } finally {
+      setUpdatingImages(false);
+    }
+  };
+
+  // Update database with the SQL query to update image paths
+  const updateDatabaseImages = async () => {
+    const confirmed = window.confirm('This will update all product images in the database to use the local GPU assets path. Continue?');
+    
+    if (!confirmed) return;
+    
+    try {
+      setUpdatingDatabaseImages(true);
+      toast.loading('Updating database product images...', { id: 'updating-db-images' });
+      
+      // Get all products
+      const { data: allProducts, error } = await supabase
+        .from('products')
+        .select('*');
+      
+      if (error) throw error;
+      
+      console.log(`Found ${allProducts?.length || 0} products. Updating images...`);
+      
+      // Image mapping
+      const imageMapping = {
+        // NVIDIA
+        'RTX 4090': '../assets/gpu/rtx-4090.png',
+        'RTX 4080 SUPER': '../assets/gpu/rtx-4080-super.png',
+        'RTX 4080': '../assets/gpu/rtx-4080.png',
+        'RTX 4070': '../assets/gpu/rtx-4070-ti.png',
+        'RTX 6000 Ada': '../assets/gpu/rtx-6000-ada.png',
+        'RTX 6000': '../assets/gpu/rtx-6000.png',
+        'RTX 5000': '../assets/gpu/rtx-5000.png',
+        'A100': '../assets/gpu/a100.png',
+        'H100': '../assets/gpu/h100.png',
+        'CMP 170HX': '../assets/gpu/cmp-170hx.png',
+        'CMP 50HX': '../assets/gpu/cmp-50hx.png',
+        
+        // AMD
+        'RX 7900 XTX': '../assets/gpu/rx-7900-xtx.png',
+        'RX 7800 XT': '../assets/gpu/rx-7800-xt.png',
+        'RX 7600': '../assets/gpu/rx-7600.png',
+        'Radeon PRO W7900': '../assets/gpu/radeon-pro-w7900.png',
+        'W7900X': '../assets/gpu/w7900x.png',
+        'MI250X': '../assets/gpu/mi250x.png',
+        
+        // Intel
+        'Arc A770': '../assets/gpu/arc-a770.png',
+        'Arc A770 LE': '../assets/gpu/intel-arc-a770.png'
+      };
+      
+      // Process each product
+      let updatedCount = 0;
+      const updates = [];
+      
+      for (const product of allProducts || []) {
+        let imagePath = null;
+        
+        // Find a matching image based on model or name
+        for (const [key, path] of Object.entries(imageMapping)) {
+          if (product.model?.includes(key) || product.name?.includes(key)) {
+            imagePath = path;
+            break;
+          }
+        }
+        
+        // Default to brand if no specific match
+        if (!imagePath) {
+          if (product.brand === 'NVIDIA') {
+            imagePath = '../assets/gpu/rtx-4090.png';
+          } else if (product.brand === 'AMD') {
+            imagePath = '../assets/gpu/rx-7900-xtx.png';
+          } else if (product.brand === 'Intel') {
+            imagePath = '../assets/gpu/arc-a770.png';
+          }
+        }
+        
+        // Update if we found a matching image
+        if (imagePath && product.image !== imagePath) {
+          updates.push(
+            supabase
+              .from('products')
+              .update({ image: imagePath })
+              .eq('id', product.id)
+              .then(({ error }) => {
+                if (!error) {
+                  updatedCount++;
+                }
+                return { id: product.id, success: !error };
+              })
+          );
+        }
+      }
+      
+      // Wait for all updates to complete
+      await Promise.all(updates);
+      
+      // Update local state with new images
+      fetchProducts(currentPage, searchTerm);
+      
+      toast.dismiss('updating-db-images');
+      toast.success(`Successfully updated ${updatedCount} product images in the database`);
+    } catch (error) {
+      console.error('Error updating database product images:', error);
+      toast.error('Failed to update database product images');
+    } finally {
+      setUpdatingDatabaseImages(false);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <Helmet>
@@ -101,13 +332,31 @@ const ProductList = () => {
       
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Manage Products</h1>
-        <Link
-          to="/admin/products/new"
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none"
-        >
-          <HiPlus className="-ml-1 mr-2 h-5 w-5" />
-          Add New Product
-        </Link>
+        <div className="flex space-x-2">
+          <button
+            onClick={updateDatabaseImages}
+            disabled={updatingDatabaseImages}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <HiDatabase className="-ml-1 mr-2 h-5 w-5" />
+            {updatingDatabaseImages ? 'Updating DB...' : 'Update DB Images'}
+          </button>
+          <button
+            onClick={updateAllProductImages}
+            disabled={updatingImages}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <HiPhotograph className="-ml-1 mr-2 h-5 w-5" />
+            {updatingImages ? 'Updating...' : 'Update UI Images'}
+          </button>
+          <Link
+            to="/admin/products/new"
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none"
+          >
+            <HiPlus className="-ml-1 mr-2 h-5 w-5" />
+            Add New Product
+          </Link>
+        </div>
       </div>
       
       {/* Search Bar */}
@@ -186,7 +435,7 @@ const ProductList = () => {
                     <div className="flex items-center">
                       {product.image ? (
                         <div className="flex-shrink-0 h-10 w-10">
-                          <img 
+                          <GpuImage 
                             className="h-10 w-10 rounded-sm object-cover" 
                             src={product.image} 
                             alt={product.name} 
