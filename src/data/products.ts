@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
-
 export interface Product {
   id: string
   name: string
@@ -142,7 +140,7 @@ export const products: Product[] = [
     }
   },
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440005',
     name: 'AMD Radeon RX 7600',
     brand: 'AMD',
     model: 'RX 7600',
@@ -169,7 +167,7 @@ export const products: Product[] = [
 
   // Workstation GPUs
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440006',
     name: 'NVIDIA RTX 6000 Ada Generation',
     brand: 'NVIDIA',
     model: 'RTX 6000',
@@ -190,7 +188,7 @@ export const products: Product[] = [
     badge: 'BEST SELLER'
   },
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440007',
     name: 'NVIDIA RTX 5000 Ada Generation',
     brand: 'NVIDIA',
     model: 'RTX 5000',
@@ -210,7 +208,7 @@ export const products: Product[] = [
     reviews: 19
   },
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440008',
     name: 'AMD Radeon PRO W7900X',
     brand: 'AMD',
     model: 'W7900X',
@@ -232,7 +230,7 @@ export const products: Product[] = [
 
   // Mining GPUs
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440009',
     name: 'NVIDIA CMP 170HX',
     brand: 'NVIDIA',
     model: 'CMP 170HX',
@@ -253,7 +251,7 @@ export const products: Product[] = [
     badge: 'BEST SELLER'
   },
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440010',
     name: 'NVIDIA CMP 50HX',
     brand: 'NVIDIA',
     model: 'CMP 50HX',
@@ -280,7 +278,7 @@ export const products: Product[] = [
 
   // AI and Machine Learning
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440011',
     name: 'NVIDIA A100 80GB',
     brand: 'NVIDIA',
     model: 'A100 80GB',
@@ -301,7 +299,7 @@ export const products: Product[] = [
     badge: 'BEST SELLER'
   },
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440012',
     name: 'NVIDIA H100 PCIe',
     brand: 'NVIDIA',
     model: 'H100 PCIe',
@@ -322,7 +320,7 @@ export const products: Product[] = [
     badge: 'NEW'
   },
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440013',
     name: 'AMD Instinct MI250X',
     brand: 'AMD',
     model: 'MI250X',
@@ -344,7 +342,7 @@ export const products: Product[] = [
 
   // Intel Gaming GPUs
   {
-    id: uuidv4(),
+    id: '550e8400-e29b-41d4-a716-446655440014',
     name: 'Intel Arc A770',
     brand: 'Intel',
     model: 'Arc A770',
@@ -363,8 +361,115 @@ export const products: Product[] = [
     rating: 4.3,
     reviews: 37,
     badge: 'NEW'
+  },
+
+  // New products to add
+  {
+    id: '550e8400-e29b-41d4-a716-446655440101',
+    name: 'NVIDIA RTX 4080 Super',
+    brand: 'NVIDIA',
+    model: 'RTX 4080 Super',
+    price: 999.99,
+    category: 'Gaming',
+    image: '/images/gpus/rtx-4080-super.png',
+    description: 'The newest addition to the RTX 40 series, featuring enhanced ray tracing and DLSS 3.5 technology.',
+    specs: {
+      memory: '16GB',
+      memoryType: 'GDDR6X',
+      coreClock: '2.21 GHz',
+      boostClock: '2.51 GHz',
+      tdp: '320W'
+    },
+    stock: 12,
+    rating: 4.8,
+    reviews: 42,
+    badge: 'NEW'
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440102',
+    name: 'AMD Radeon RX 7900 XTX OC',
+    brand: 'AMD',
+    model: 'RX 7900 XTX OC',
+    price: 1199.99,
+    category: 'Gaming',
+    image: '/images/gpus/rx-7900-xtx.png',
+    description: 'Factory overclocked RX 7900 XTX with advanced cooling for extreme gaming performance and content creation.',
+    specs: {
+      memory: '24GB',
+      memoryType: 'GDDR6',
+      coreClock: '2.3 GHz',
+      boostClock: '2.6 GHz',
+      tdp: '355W'
+    },
+    stock: 8,
+    rating: 4.7,
+    reviews: 35,
+    badge: 'NEW'
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440103',
+    name: 'NVIDIA RTX 6000 Ada Generation',
+    brand: 'NVIDIA',
+    model: 'RTX 6000 Ada',
+    price: 6799.99,
+    category: 'Workstation',
+    image: '/images/gpus/rtx-6000-ada.png',
+    description: 'Professional visualization workstation GPU with unprecedented performance for AI-enhanced workflows.',
+    specs: {
+      memory: '48GB',
+      memoryType: 'GDDR6 ECC',
+      coreClock: '2.1 GHz',
+      boostClock: '2.5 GHz',
+      tdp: '300W'
+    },
+    stock: 3,
+    rating: 4.9,
+    reviews: 12,
+    badge: 'NEW'
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440104',
+    name: 'AMD Radeon PRO W7900',
+    brand: 'AMD',
+    model: 'Radeon PRO W7900',
+    price: 3999.99,
+    category: 'Workstation',
+    image: '/images/gpus/radeon-pro-w7900.png',
+    description: 'Professional graphics card for demanding visualization workloads with industry-leading memory capacity.',
+    specs: {
+      memory: '32GB',
+      memoryType: 'GDDR6 ECC',
+      coreClock: '1.9 GHz',
+      boostClock: '2.3 GHz',
+      tdp: '295W'
+    },
+    stock: 6,
+    rating: 4.6,
+    reviews: 18,
+    badge: 'NEW'
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440105',
+    name: 'Intel Arc A770 Limited Edition',
+    brand: 'Intel',
+    model: 'Arc A770 LE',
+    price: 349.99,
+    category: 'Gaming',
+    image: '/images/gpus/intel-arc-a770.png',
+    description: 'Intel\'s flagship gaming GPU with XeSS upscaling technology and ray tracing capabilities.',
+    specs: {
+      memory: '16GB',
+      memoryType: 'GDDR6',
+      coreClock: '2.1 GHz',
+      boostClock: '2.4 GHz',
+      tdp: '225W'
+    },
+    stock: 15,
+    rating: 4.2,
+    reviews: 47,
+    badge: 'NEW'
   }
-]
+];
 
 // Helper function to get products by category
 export const getProductsByCategory = (category: Product['category']) => {
@@ -388,22 +493,22 @@ export const getSaleProducts = () => {
 
 // Add this helper function
 export const getTopSellingProducts = () => {
-  return products.filter(product => product.badge === 'BEST SELLER').slice(0, 4)
+  return products.filter(product => product.reviews > 100).sort((a, b) => b.rating - a.rating).slice(0, 8)
 }
 
 // Add these helper functions
 export const getGamingProducts = () => {
-  return products.filter(product => product.category === 'Gaming').slice(0, 4)
+  return getProductsByCategory('Gaming')
 }
 
 export const getWorkstationProducts = () => {
-  return products.filter(product => product.category === 'Workstation').slice(0, 4)
+  return getProductsByCategory('Workstation')
 }
 
 export const getMiningProducts = () => {
-  return products.filter(product => product.category === 'Mining').slice(0, 4)
+  return getProductsByCategory('Mining')
 }
 
 export const getAIProducts = () => {
-  return products.filter(product => product.category === 'AI').slice(0, 4)
+  return getProductsByCategory('AI')
 } 

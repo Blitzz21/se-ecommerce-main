@@ -1,14 +1,26 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { HiMenu, HiX, HiShoppingCart, HiUser, HiSearch, HiChevronDown } from 'react-icons/hi'
+import { Link, useNavigate } from 'react-router-dom'
+import { HiMenu, HiX, HiShoppingCart, HiUser, HiChevronDown } from 'react-icons/hi'
 import { useCart } from '../../contexts/CartContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { SearchBar } from '../search/SearchBar'
+import { getAIProducts, getGamingProducts, getMiningProducts, getWorkstationProducts } from '../../data/products'
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [isShopOpen, setIsShopOpen] = useState(false)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const { cartItems } = useCart()
-  const { user, signOut } = useAuth()
+  const { user, signOut, isAdmin } = useAuth()
+  const navigate = useNavigate()
+  const products = [
+    ...getGamingProducts(),
+    ...getWorkstationProducts(),
+    ...getMiningProducts(),
+    ...getAIProducts()
+  ]
+
+  console.log('Navbar rendered - User:', user?.id, 'isAdmin:', isAdmin);
 
   return (
     <nav className="bg-black border-b text-gray-400 sticky top-0 z-50">
@@ -85,55 +97,114 @@ export const Navbar = () => {
           </div>
 
           {/* Search and Cart */}
-          <div className="flex items-center space-x-6">
-            <div className="hidden lg:flex relative">
-              <input
-                type="text"
-                placeholder="Search products..."
-                className="w-64 pl-10 pr-4 py-2 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
-              />
-              <HiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <div className="flex items-center gap-4">
+            {/* Desktop Search */}
+            <div className="hidden md:block w-96">
+              <SearchBar products={products} />
             </div>
-            
-            <Link 
-              to={user ? "/cart" : "/login"} 
-              className="hover:text-green-500 transition-colors relative"
-              onClick={(e) => {
-                if (!user) {
-                  e.preventDefault();
-                  // You can add a toast notification here or handle the login prompt differently
-                  alert("Please log in to view your cart");
-                }
-              }}
-            >
-              <HiShoppingCart className="h-6 w-6" />
+
+            {/* Cart */}
+            <Link to="/cart" className="relative">
+              <HiShoppingCart className="h-6 w-6 text-gray-700" />
               {cartItems.length > 0 && (
-                <span className="absolute -top-2 -right-2 bg-green-500 text-green-500 rounded-full h-5 w-5 flex items-center justify-center text-xs font-medium">
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                   {cartItems.length}
                 </span>
               )}
             </Link>
-            
-            {user ? (
-              <Link 
-                to="/account" 
-                className="hover:text-green-500 transition-colors"
-              >
-                <HiUser className="h-6 w-6" />
-              </Link>
-            ) : (
-              <Link 
-                to="/login" 
-                className="hover:text-green-500 transition-colors"
-              >
-                <HiUser className="h-6 w-6" />
-              </Link>
-            )}
 
-            {user && (
-              <button onClick={signOut} className="hover:text-white transition-colors">
-                Sign Out
-              </button>
+            {/* User Menu */}
+            {user ? (
+              <div className="relative">
+                <button 
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="hover:text-green-500 transition-colors flex items-center"
+                >
+                  <HiUser className="h-6 w-6" />
+                  <HiChevronDown className={`ml-1 h-4 w-4 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                
+                <div
+                  className={`absolute right-0 mt-2 w-48 text-gray-600 bg-white rounded-lg shadow-lg ring-1 ring-gray-200 transition-all duration-200 ease-in-out
+                    ${isUserMenuOpen ? 'opacity-100 translate-y-0 visible' : 'opacity-0 -translate-y-2 invisible'}`}
+                >
+                  <div className="py-1" role="menu">
+                    <Link
+                      to="/account"
+                      className="block px-4 py-2 hover:text-black transition-colors"
+                      role="menuitem"
+                    >
+                      Account
+                    </Link>
+                    <Link
+                      to="/orders"
+                      className="block px-4 py-2 hover:text-black transition-colors"
+                      role="menuitem"
+                    >
+                      Orders
+                    </Link>
+                    <Link
+                      to="/dashboard"
+                      className="block px-4 py-2 hover:text-black transition-colors"
+                      role="menuitem"
+                    >
+                      Dashboard
+                    </Link>
+                    {isAdmin ? (
+                      <Link
+                        to="/admin"
+                        className="block px-4 py-2 text-green-600 font-medium hover:text-green-800 transition-colors"
+                        role="menuitem"
+                      >
+                        Admin Panel
+                      </Link>
+                    ) : (
+                      <div className="block px-4 py-2 text-gray-400 cursor-not-allowed">
+                        Admin Panel (No Access)
+                      </div>
+                    )}
+                    <button
+                      onClick={signOut}
+                      className="block w-full text-left px-4 py-2 hover:text-black transition-colors"
+                      role="menuitem"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="relative">
+                <button 
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="hover:text-green-500 transition-colors flex items-center"
+                >
+                  <HiUser className="h-6 w-6" />
+                  <HiChevronDown className={`ml-1 h-4 w-4 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                
+                <div
+                  className={`absolute right-0 mt-2 w-48 text-gray-600 bg-white rounded-lg shadow-lg ring-1 ring-gray-200 transition-all duration-200 ease-in-out
+                    ${isUserMenuOpen ? 'opacity-100 translate-y-0 visible' : 'opacity-0 -translate-y-2 invisible'}`}
+                >
+                  <div className="py-1" role="menu">
+                    <Link
+                      to="/login"
+                      className="block px-4 py-2 hover:text-black transition-colors"
+                      role="menuitem"
+                    >
+                      Sign In
+                    </Link>
+                    <Link
+                      to="/register"
+                      className="block px-4 py-2 hover:text-black transition-colors"
+                      role="menuitem"
+                    >
+                      Create Account
+                    </Link>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
@@ -150,43 +221,101 @@ export const Navbar = () => {
       </div>
 
       {/* Mobile Menu */}
-      {isOpen && (
-        <div className="md:hidden absolute top-16 inset-x-0 bg-white shadow-lg">
-          <div className="px-2 pt-2 pb-3 space-y-1">
-            {/* Search */}
-            <div className="p-2">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <HiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              </div>
-            </div>
-            
-            {/* Mobile Navigation Links */}
-            <Link
-              to="/products"
-              className="block px-3 py-2 hover:text-white transition-colors hover:bg-gray-50"
-            >
-              All Products
-            </Link>
-            <Link
-              to="/on-sale"
-              className="block px-3 py-2 hover:text-white transition-colors hover:bg-gray-50"
-            >
-              On Sale
-            </Link>
-            <Link
-              to="/new-arrivals"
-              className="block px-3 py-2  hover:text-white transition-colors hover:bg-gray-50"
-            >
-              New Arrivals
-            </Link>
+      <div className={`md:hidden ${isOpen ? 'block' : 'hidden'}`}>
+        <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+          {/* Mobile Search */}
+          <div className="relative mb-3">
+            <SearchBar products={products} />
           </div>
+          
+          <Link
+            to="/products"
+            className="block px-3 py-2 rounded-md hover:bg-green-900 hover:text-white transition-colors"
+            onClick={() => setIsOpen(false)}
+          >
+            All Products
+          </Link>
+          <Link
+            to="/on-sale"
+            className="block px-3 py-2 rounded-md hover:bg-green-900 hover:text-white transition-colors"
+            onClick={() => setIsOpen(false)}
+          >
+            On Sale
+          </Link>
+          <Link
+            to="/new-arrivals"
+            className="block px-3 py-2 rounded-md hover:bg-green-900 hover:text-white transition-colors"
+            onClick={() => setIsOpen(false)}
+          >
+            New Arrivals
+          </Link>
+          
+          {user ? (
+            <>
+              <div className="mt-4 border-t pt-2 text-sm text-gray-400">Your Account</div>
+              <Link
+                to="/account"
+                className="block px-3 py-2 rounded-md hover:bg-green-900 hover:text-white transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Account Settings
+              </Link>
+              <Link
+                to="/orders"
+                className="block px-3 py-2 rounded-md hover:bg-green-900 hover:text-white transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Orders
+              </Link>
+              <Link
+                to="/dashboard"
+                className="block px-3 py-2 rounded-md hover:bg-green-900 hover:text-white transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Dashboard
+              </Link>
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className="block px-3 py-2 rounded-md text-green-500 hover:bg-green-900 hover:text-white transition-colors"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Admin Panel
+                </Link>
+              )}
+              <button
+                onClick={() => {
+                  setIsOpen(false)
+                  signOut()
+                }}
+                className="block w-full text-left px-3 py-2 rounded-md hover:bg-green-900 hover:text-white transition-colors"
+              >
+                Sign Out
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="mt-4 border-t pt-2 text-sm text-gray-400">Account</div>
+              <Link
+                to="/login"
+                className="block px-3 py-2 rounded-md hover:bg-green-900 hover:text-white transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Sign In
+              </Link>
+              <Link
+                to="/register"
+                className="block px-3 py-2 rounded-md hover:bg-green-900 hover:text-white transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Create Account
+              </Link>
+            </>
+          )}
         </div>
-      )}
+      </div>
     </nav>
   )
 } 
+
+export default Navbar;

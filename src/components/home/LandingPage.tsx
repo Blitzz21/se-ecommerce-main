@@ -1,12 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { HiArrowRight } from 'react-icons/hi'
-import { Product, getTopSellingProducts, getGamingProducts, getWorkstationProducts, getMiningProducts, getAIProducts } from '../../data/products'
+import { HiArrowRight, HiShoppingCart } from 'react-icons/hi'
+import { Product, getTopSellingProducts, getGamingProducts, getWorkstationProducts, getMiningProducts, getAIProducts, getFeaturedProducts, getSaleProducts } from '../../data/products'
 import { useState, useEffect, useRef } from 'react'
 import { useCart } from '../../contexts/CartContext'
 import { nvidiaLogo, amdLogo, msiLogo, intelLogo, asusLogo, rogLogo, gigabyteLogo } from '../../assets/brandLogos/index'
 import { hero1, hero2, hero3 } from '../../assets/heroSlides/index'
 import { ai, gaming, mining, workstation } from '../../assets/workloads/index'
 import { motion, useInView } from 'framer-motion'
+import { useCurrency } from '../../contexts/CurrencyContext'
+import { toast } from 'react-hot-toast'
 
 const workloads = [
   {
@@ -64,15 +66,14 @@ export const LandingPage = () => {
   const navigate = useNavigate()
   const { addToCart } = useCart()
   const topSellers = getTopSellingProducts()
-  const gamingProducts = getGamingProducts()
-  const workstationProducts = getWorkstationProducts()
-  const miningProducts = getMiningProducts()
-  const aiProducts = getAIProducts()
+  const newArrivalsProducts = getFeaturedProducts().filter(product => product.badge === 'NEW')
+  const onSaleProducts = getSaleProducts()
   const [currentSlide, setCurrentSlide] = useState(0)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
   const featuresRef = useRef<HTMLDivElement>(null)
   const isFeaturesInView = useInView(featuresRef, { once: true, amount: 0.1 })
+  const { format } = useCurrency()
 
   // Handle automatic slideshow
   useEffect(() => {
@@ -106,97 +107,106 @@ export const LandingPage = () => {
     }
   }
 
-  const ProductCard = ({ product }: { product: Product }) => (
-    <div 
-      key={product.id} 
-      className="group bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-full transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:scale-[1.02]"
-    >
-      {/* Product Image with overlay */}
-      <div className="relative overflow-hidden">
-        <img
-          src="https://placehold.co/400x300?text=GPU"
-          alt={product.name}
-          className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-500"
-        />
-        
-        {/* Badge if exists */}
-        {product.badge && (
-          <div className="absolute top-2 right-2 bg-green-500 text-white text-xs font-bold py-1 px-2 rounded-full">
-            {product.badge}
-          </div>
-        )}
-        
-        {/* Quick-add button overlay */}
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <button
-            onClick={() => addToCart({
-              ...product,
-              badge: product.badge || null,
-              sale: product.sale || null,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full transition-colors transform hover:scale-105"
-          >
-            Quick Add
-          </button>
-        </div>
-      </div>
-      
-      {/* Product details */}
-      <div className="p-4 flex flex-col flex-grow">
-        <h3 className="text-lg font-semibold mb-1 group-hover:text-green-600 transition-colors">{product.name}</h3>
-        <p className="text-gray-600 text-sm mb-4 flex-grow">{product.description}</p>
-        
-        {/* Price and CTA */}
-        <div className="mt-auto">
-          <div className="flex justify-between items-center mb-3">
-            <p className="text-xl font-bold">${product.price}</p>
-            {product.sale && (
-              <span className="text-red-500 text-sm font-bold">SALE</span>
-            )}
-          </div>
-          <button
-            onClick={() => addToCart({
-              ...product,
-              badge: product.badge || null,
-              sale: product.sale || null,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })}
-            className="w-full bg-black text-white px-4 py-2 rounded hover:bg-green-600 transition-colors flex items-center justify-center"
-          >
-            <span>Add to Cart</span>
-            <HiArrowRight className="ml-2 h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-
   const ProductSection = ({ title, products, link }: { 
     title: string, 
     products: Product[], 
     link: string 
-  }) => (
-    <div className="mb-16">
-      <div className="flex justify-between items-center mb-8">
-        <div className="relative">
-          <h3 className="text-2xl font-bold text-gray-900">{title}</h3>
-          <div className="absolute -bottom-2 left-0 w-12 h-1 bg-green-500"></div>
+  }) => {
+    return (
+      <section className="mb-12">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+          <Link to={link} className="text-green-600 hover:text-green-700 flex items-center group">
+            <span>View All</span>
+            <HiArrowRight className="ml-1 h-4 w-4 transform group-hover:translate-x-1 transition-transform" />
+          </Link>
         </div>
-        <Link to={link} className="text-green-600 hover:text-green-700 flex items-center group">
-          <span>View All</span>
-          <HiArrowRight className="ml-1 h-4 w-4 transform group-hover:translate-x-1 transition-transform" />
-        </Link>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {products.map((product) => (
-          <ProductCard key={product.id} product={product} />
-        ))}
-      </div>
-    </div>
-  )
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {products.map((product) => (
+            <div key={product.id} className="relative">
+              <Link 
+                to={`/products/${product.id}`}
+                className="block h-full"
+              >
+                <motion.div 
+                  whileHover={{ y: -5 }}
+                  className="bg-white rounded-lg shadow-md h-full flex flex-col transition-all duration-300 hover:shadow-xl group"
+                >
+                  <div className="relative">
+                    {product.badge && (
+                      <span className="absolute top-2 left-2 z-10 bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                        {product.badge}
+                      </span>
+                    )}
+                    {product.sale?.active && (
+                      <span className="absolute top-2 right-2 z-10 bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                        {product.sale.percentage}% OFF
+                      </span>
+                    )}
+                    <img
+                      src={product.image || "https://placehold.co/300x200?text=GPU"}
+                      alt={product.name}
+                      className="w-full h-48 object-contain p-4"
+                    />
+                  </div>
+                  
+                  <div className="p-4 flex flex-col flex-grow">
+                    <h3 className="text-lg font-semibold mb-1 group-hover:text-green-600 transition-colors">
+                      {product.name}
+                    </h3>
+                    <p className="text-gray-600 text-sm mb-4 flex-grow line-clamp-2">
+                      {product.description}
+                    </p>
+                    
+                    {/* Price and Stock */}
+                    <div className="mt-auto">
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="flex flex-col">
+                          {product.sale?.active ? (
+                            <>
+                              <span className="text-xl font-bold">{format(product.price)}</span>
+                              <span className="text-sm text-gray-500 line-through">
+                                {format(product.sale.oldPrice)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-xl font-bold">{format(product.price)}</span>
+                          )}
+                        </div>
+                        <span className={`text-sm font-medium ${product.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {product.stock > 0 ? `In Stock` : 'Out of Stock'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </Link>
+              
+              {/* Add to Cart Button */}
+              {product.stock > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addToCart({
+                      ...product,
+                      badge: product.badge,
+                      sale: product.sale
+                    });
+                  }}
+                  className="absolute bottom-4 right-4 bg-green-500 hover:bg-green-600 text-white rounded-full p-3 shadow-lg transform transition-transform hover:scale-110 z-10"
+                  aria-label="Add to cart"
+                >
+                  <HiShoppingCart className="w-6 h-6" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-white">
@@ -450,32 +460,18 @@ export const LandingPage = () => {
             link="/products?sort=best-selling" 
           />
 
-          {/* Gaming GPUs */}
+          {/* New Arrivals */}
           <ProductSection 
-            title="GAMING GPUs" 
-            products={gamingProducts} 
-            link="/products?category=Gaming" 
+            title="NEW ARRIVALS" 
+            products={newArrivalsProducts} 
+            link="/new-arrivals" 
           />
 
-          {/* Workstation Cards */}
+          {/* On Sale */}
           <ProductSection 
-            title="WORKSTATION CARDS" 
-            products={workstationProducts} 
-            link="/products?category=Workstation" 
-          />
-
-          {/* Mining Solutions */}
-          <ProductSection 
-            title="MINING SOLUTIONS" 
-            products={miningProducts} 
-            link="/products?category=Mining" 
-          />
-
-          {/* AI Accelerators */}
-          <ProductSection 
-            title="AI ACCELERATORS" 
-            products={aiProducts} 
-            link="/products?category=AI" 
+            title="ON SALE" 
+            products={onSaleProducts} 
+            link="/on-sale" 
           />
 
           {/* Browse by Workload with enhanced visuals */}
