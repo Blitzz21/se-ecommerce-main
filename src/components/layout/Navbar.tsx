@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { HiMenu, HiX, HiShoppingCart, HiUser, HiChevronDown, HiViewGrid } from 'react-icons/hi'
 import { useCart } from '../../contexts/CartContext'
@@ -12,6 +12,14 @@ export const Navbar = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const { cartItems } = useCart()
   const { user, signOut, isAdmin, isInitialized } = useAuth()
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('Navbar - User:', user?.email)
+    console.log('Navbar - isAdmin:', isAdmin)
+    console.log('Navbar - isInitialized:', isInitialized)
+  }, [user, isAdmin, isInitialized])
+  
   const products = [
     ...getGamingProducts(),
     ...getWorkstationProducts(),

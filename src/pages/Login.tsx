@@ -23,58 +23,6 @@ const Login: React.FC<LoginProps> = ({ isRegister = false }) => {
   const from = location.state?.from?.pathname || '/'
 
   useEffect(() => {
-    const checkEmailAvailability = async () => {
-      if (!email || isLogin) return
-      
-      try {
-        // Check if email exists in profiles
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('email', email)
-          .single();
-        
-        if (profileData) {
-          setError('Email already exists');
-          return;
-        }
-        
-        // Additional check against auth metadata
-        try {
-          // Try to check if account exists via a sign-in attempt with a known-invalid password
-          // This will return a specific error if the email exists but password is wrong
-          const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password: 'checkIfEmailExists_1234567890!', // Deliberately wrong password
-          });
-          
-          if (error && error.message.includes('Invalid login credentials')) {
-            // Email exists, but password is wrong (which is expected here)
-            setError('Email already exists');
-          } else {
-            // Any other error means email likely doesn't exist in auth
-            setError('');
-          }
-        } catch (signInError) {
-          console.error('Error during availability check:', signInError);
-          // Default to available if we can't determine
-          setError('');
-        }
-      } catch (err) {
-        // If we get a "not found" error from profiles, that's good - email isn't registered
-        if (err instanceof Error && err.message.includes('PGRST116')) {
-          setError('');
-        } else {
-          console.error('Error checking email:', err);
-        }
-      }
-    };
-    
-    const debounce = setTimeout(checkEmailAvailability, 500);
-    return () => clearTimeout(debounce);
-  }, [email, isLogin]);
-
-  useEffect(() => {
     if (!isLogin) {
       const isValid = password.length >= 6
       setIsValidPassword(isValid)
@@ -84,53 +32,22 @@ const Login: React.FC<LoginProps> = ({ isRegister = false }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
+    setLoading(true)
     
     if (!isLogin) {
       if (!isValidPassword) {
-        setError('Please fix password validation errors')
+        setError('Password must be at least 6 characters')
+        setLoading(false)
         return
       }
       if (password !== confirmPassword) {
         setError('Passwords do not match')
+        setLoading(false)
         return
       }
       
-      // Perform one final check to make sure the email is available
       try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('email', email)
-          .single()
-        
-        if (data) {
-          setError('This email is already registered. Please use a different email or sign in.')
-          return
-        }
-      } catch (err) {
-        // If error is PGRST116 (not found), that's good - it means the email is available
-        if (err instanceof Error && !err.message.includes('PGRST116')) {
-          console.error('Error checking email availability:', err)
-        }
-      }
-    }
-
-    try {
-      setError('')
-      setLoading(true)
-      
-      if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-        
-        if (error) throw error
-        if (data?.user) {
-          navigate(from, { replace: true })
-        }
-      } else {
-        // For registration, we'll use the regular sign-up method first
         console.log('Attempting to sign up user with email:', email);
         
         const { data, error } = await supabase.auth.signUp({
@@ -148,20 +65,57 @@ const Login: React.FC<LoginProps> = ({ isRegister = false }) => {
         
         if (error) {
           if (error.message.includes('already registered')) {
-            throw new Error('This email is already registered. Please use a different email or sign in.')
+            setError('This email is already registered. Please use a different email or sign in.')
+          } else if (error.message.includes('password')) {
+            setError('Password must be at least 6 characters')
+          } else {
+            setError(error.message || 'Failed to create account')
           }
-          throw error
+          setLoading(false)
+          return
         }
         
-        // If sign up is successful and credentials are created
         if (data?.user) {
+          // Create a profile for the user
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert([
+              {
+                id: data.user.id,
+                email: data.user.email,
+                name: email.split('@')[0]
+              }
+            ])
+          
+          if (profileError) {
+            console.error('Error creating profile:', profileError)
+            // Don't show error to user since account was created
+            // Just log it for debugging
+          }
+          
           setRegistrationSuccess(true)
         }
+      } catch (err: any) {
+        console.error('Registration error:', err)
+        setError(err.message || 'Failed to create account')
+        setLoading(false)
       }
-    } catch (err: any) {
-      console.error('Authentication error:', err)
-      setError(err.message || (isLogin ? 'Invalid credentials' : 'Failed to create account'))
-      setLoading(false)
+    } else {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        
+        if (error) throw error
+        if (data?.user) {
+          navigate(from, { replace: true })
+        }
+      } catch (err: any) {
+        console.error('Login error:', err)
+        setError(err.message || 'Invalid credentials')
+        setLoading(false)
+      }
     }
   }
 
@@ -210,14 +164,6 @@ const Login: React.FC<LoginProps> = ({ isRegister = false }) => {
           {error && (
             <div className="rounded-md bg-red-50 p-4">
               <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
-          {error === 'Account created successfully! Please check your email for verification.' && (
-            <div className="rounded-md bg-green-50 p-4">
-              <p className="text-sm text-green-700">{error}</p>
-              <p className="text-sm text-gray-500 mt-2">
-                If you don't see the email, please check your spam folder.
-              </p>
             </div>
           )}
           <div className="rounded-md shadow-sm -space-y-px">

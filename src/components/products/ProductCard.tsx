@@ -134,7 +134,7 @@ const ProductCard = ({
             />
           </div>
           
-          <div className="p-4 flex flex-col flex-grow">
+          <div className="p-4 flex flex-col flex-grow pb-16">
             <h3 className="text-lg font-semibold mb-1 group-hover:text-green-600 transition-colors">
               {name}
             </h3>

@@ -1,31 +1,52 @@
+/**
+ * Authentication Context
+ * Provides authentication state and functions throughout the application
+ * Handles user authentication, admin verification, and session management
+ */
+
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
-import { checkIsAdmin as verifyAdminStatus, createAdminRole, getAdminUsers } from '../lib/dbInit'
+import { getAdminUsers } from '../lib/dbInit'
 
+/**
+ * AuthContextType Interface
+ * Defines the shape of the authentication context
+ */
 export interface AuthContextType {
-  user: User | null
-  isAdmin: boolean
-  isInitialized: boolean
-  setIsAdmin: (isAdmin: boolean) => void
-  signIn: (email: string, password: string) => Promise<any>
-  signOut: () => Promise<void>
-  signUp: (email: string, password: string) => Promise<any>
-  changePassword: (newPassword: string) => Promise<any>
-  checkIsAdmin: () => Promise<boolean>
-  getAllAdmins: () => Promise<{userId: string}[]>
+  user: User | null                                      // Current authenticated user
+  isAdmin: boolean                                       // Whether the current user is an admin
+  isInitialized: boolean                                // Whether auth has been initialized
+  setIsAdmin: (isAdmin: boolean) => void                // Function to set admin status
+  signIn: (email: string, password: string) => Promise<any>  // Sign in function
+  signOut: () => Promise<void>                          // Sign out function
+  signUp: (email: string, password: string) => Promise<any>  // Sign up function
+  changePassword: (newPassword: string) => Promise<any>  // Change password function
+  checkIsAdmin: () => Promise<boolean>                  // Check admin status function
+  getAllAdmins: () => Promise<{userId: string}[]>       // Get all admin users
 }
 
+// Create the auth context with undefined initial value
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const KNOWN_ADMIN_IDS = ['336187fc-3f85-4de9-9df4-f5d42e5c0b92']
+// List of known admin email addresses
+const KNOWN_ADMIN_EMAILS = ['blitzkirg21@gmail.com', 'johnfloydmarticio212005@gmail.com']
 
+/**
+ * AuthProvider Component
+ * Provides authentication context to the application
+ * Manages authentication state and provides auth-related functions
+ */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [isCheckingAdmin, setIsCheckingAdmin] = useState(false)
+  // State management
+  const [user, setUser] = useState<User | null>(null)           // Current user
+  const [isAdmin, setIsAdmin] = useState(false)                 // Admin status
+  const [isInitialized, setIsInitialized] = useState(false)     // Initialization status
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(false) // Admin check status
 
+  /**
+   * Get all admin users from the database
+   */
   const getAllAdmins = async (): Promise<{userId: string}[]> => {
     try {
       const result = await getAdminUsers();
@@ -36,9 +57,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  /**
+   * Check if the current user is an admin
+   * Includes retry logic for reliability
+   */
   const checkIsAdmin = async (retryCount = 3): Promise<boolean> => {
     if (!user) {
       console.log('No user found for admin check')
+      setIsAdmin(false)
       return false
     }
 
@@ -49,40 +75,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setIsCheckingAdmin(true)
-      console.log('Checking admin status for user:', user.id)
+      console.log('Checking admin status for user:', user.email)
 
-      // First check if user is in known admin list
-      if (KNOWN_ADMIN_IDS.includes(user.id)) {
+      // First check known admin emails
+      if (KNOWN_ADMIN_EMAILS.includes(user.email || '')) {
         console.log('User is a known admin')
         setIsAdmin(true)
         return true
       }
 
-      // Then check in database
-      const isUserAdmin = await verifyAdminStatus(user.id)
+      // Then check database for admin role
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
       
-      if (isUserAdmin) {
-        console.log('User verified as admin in database')
-        setIsAdmin(true)
-        return true
+      if (error) {
+        console.error('Error checking admin status:', error)
+        return false
       }
-
-      // If not admin and is known admin ID, try to create admin role
-      if (KNOWN_ADMIN_IDS.includes(user.id)) {
-        console.log('Creating admin role for known admin')
-        const result = await createAdminRole(user.id)
-        if (result.success) {
-          setIsAdmin(true)
-          return true
-        }
-      }
-
-      setIsAdmin(false)
-      return false
+      
+      const isUserAdmin = !!data
+      console.log('User admin status:', isUserAdmin)
+      setIsAdmin(isUserAdmin)
+      return isUserAdmin
     } catch (error) {
       console.error('Error checking admin status:', error)
       
-      // Retry logic
+      // Retry logic for reliability
       if (retryCount > 0) {
         console.log(`Retrying admin check... (${retryCount} attempts remaining)`)
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second before retry
@@ -96,7 +118,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Initialize auth state
+  /**
+   * Initialize authentication state and set up auth state change listener
+   */
   useEffect(() => {
     let mounted = true;
 
@@ -117,10 +141,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (mounted) {
           setUser(currentUser)
           
-          // Check admin status in the background
+          // Check admin status if user exists
           if (currentUser) {
             console.log('Checking admin status for user:', currentUser.id);
-            await checkIsAdmin() // Wait for initial admin check
+            await checkIsAdmin()
           } else {
             console.log('No user found during initialization');
             setIsAdmin(false)
@@ -136,10 +160,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Start initialization immediately
+    // Start initialization
     initializeAuth()
 
-    // Listen for auth changes
+    // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
@@ -149,22 +173,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setUser(currentUser)
       
-      // Check admin status in the background
+      // Update admin status on auth state change
       if (currentUser) {
         console.log('Checking admin status after auth state change');
-        await checkIsAdmin() // Wait for admin check to complete
+        await checkIsAdmin()
       } else {
         console.log('No user found after auth state change');
         setIsAdmin(false)
       }
     })
 
+    // Cleanup function
     return () => {
       mounted = false
       subscription.unsubscribe()
     }
   }, [])
 
+  /**
+   * Sign in with email and password
+   */
   const signIn = async (email: string, password: string) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -177,8 +205,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.user) {
         setUser(data.user)
         
-        // Check admin status and wait for result
-        await checkIsAdmin()
+        // Check admin status after successful sign in
+        const isAdminStatus = await checkIsAdmin()
+        console.log('Sign in - Admin status check result:', isAdminStatus)
+        setIsAdmin(isAdminStatus)
       }
       
       return { data, error }
@@ -188,6 +218,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  /**
+   * Sign up with email and password
+   */
   const signUp = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -197,6 +230,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { data, error }
   }
 
+  /**
+   * Sign out the current user
+   */
   const signOut = async () => {
     try {
       const { error } = await supabase.auth.signOut()
@@ -209,6 +245,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  /**
+   * Change the current user's password
+   */
   const changePassword = async (newPassword: string) => {
     const { data, error } = await supabase.auth.updateUser({
       password: newPassword,
@@ -217,6 +256,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { data, error }
   }
 
+  // Create the context value object
   const value = {
     user,
     isAdmin,
@@ -233,6 +273,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+/**
+ * Custom hook to use the auth context
+ * Throws an error if used outside of AuthProvider
+ */
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {

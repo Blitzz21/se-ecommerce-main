@@ -1,13 +1,56 @@
-import { getFeaturedProducts } from '../data/products'
+import { useState, useEffect } from 'react'
 import { useCart } from '../contexts/CartContext'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useCurrency } from '../contexts/CurrencyContext'
+import { supabase } from '../lib/supabase'
+import { Product } from '../data/products'
 
 export const NewArrivals = () => {
-  const newProducts = getFeaturedProducts().filter(product => product.badge === 'NEW')
+  const [newProducts, setNewProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
   const { addToCart } = useCart()
   const { format } = useCurrency()
+
+  useEffect(() => {
+    const fetchNewProducts = async () => {
+      try {
+        setLoading(true)
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('badge', 'NEW')
+          .order('created_at', { ascending: false })
+
+        if (error) throw error
+
+        // Convert database products to match the Product type
+        const formattedProducts = data?.map(product => ({
+          ...product,
+          badge: product.badge || undefined,
+          sale: product.sale || undefined,
+          brand: product.brand as any,
+          category: product.category as any
+        })) || []
+
+        setNewProducts(formattedProducts)
+      } catch (error) {
+        console.error('Error fetching new products:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchNewProducts()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -48,7 +91,7 @@ export const NewArrivals = () => {
                 </div>
                 
                 {/* Product details */}
-                <div className="p-4 flex flex-col flex-grow">
+                <div className="p-4 flex flex-col flex-grow pb-16">
                   <h3 className="text-lg font-semibold mb-1 group-hover:text-green-600 transition-colors">
                     {product.name}
                   </h3>

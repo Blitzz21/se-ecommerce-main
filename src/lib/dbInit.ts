@@ -1,9 +1,19 @@
+/**
+ * Database Initialization and Management Module
+ * Handles database setup, admin role management, and storage initialization
+ */
+
 import { supabase } from './supabase';
 import { initializeProducts } from './initializeProducts';
 import { initializeOrders } from './initializeOrders';
 
 /**
- * Simplified database initialization
+ * Initialize the database with required tables and initial data
+ * This function runs when the application starts and sets up:
+ * - user_roles table
+ * - storage buckets
+ * - products
+ * - orders
  */
 export async function initDb() {
   try {
@@ -32,17 +42,17 @@ export async function initDb() {
       console.log('Continuing with other initialization...');
     }
     
-    // Initialize storage buckets
+    // Initialize storage buckets for file uploads
     try {
       await initializeStorage();
     } catch (error) {
       console.error('Failed to initialize storage buckets:', error);
     }
     
-    // Initialize products
+    // Set up initial products in the database
     await initializeProducts();
     
-    // Initialize orders
+    // Set up initial orders structure
     await initializeOrders();
     
     console.log('Database initialization completed');
@@ -54,66 +64,79 @@ export async function initDb() {
 }
 
 /**
- * Set admin role for a user
+ * Set admin role for a user by email
+ * This function:
+ * 1. Finds the user by email in profiles table
+ * 2. Checks if they already have admin role
+ * 3. Grants admin role if they don't have it
  */
-export async function setAdmin(userEmail: string) {
+export const setAdmin = async (userEmail: string) => {
   try {
-    console.log(`Setting up admin role for user ${userEmail}...`);
-    
-    // First, get the user ID from the email
-    const { data: userData, error: userError } = await supabase
+    // First get the user's ID from profiles table
+    const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .select('id')
       .eq('email', userEmail)
       .single();
-    
-    if (userError || !userData) {
-      console.error('User not found:', userError);
+
+    if (profileError) {
+      console.error('Error finding user:', profileError);
       return { success: false, error: 'User not found' };
     }
-    
-    const userId = userData.id;
-    
-    // Create user_roles record
+
+    if (!profileData) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Check if user already has admin role
+    const { data: existingRole, error: roleCheckError } = await supabase
+      .from('user_roles')
+      .select('*')
+      .eq('user_id', profileData.id)
+      .eq('role', 'admin')
+      .single();
+
+    if (roleCheckError && roleCheckError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+      console.error('Error checking existing role:', roleCheckError);
+      return { success: false, error: 'Failed to check existing role' };
+    }
+
+    // If user already has admin role, return success
+    if (existingRole) {
+      return { success: true, message: 'User already has admin role' };
+    }
+
+    // Grant admin role to the user
     const { error: insertError } = await supabase
       .from('user_roles')
-      .insert({
-        user_id: userId,
-        role: 'admin',
-        created_at: new Date().toISOString()
-      });
-    
+      .insert([
+        {
+          user_id: profileData.id,
+          role: 'admin'
+        }
+      ]);
+
     if (insertError) {
-      console.error('Error inserting role:', insertError);
-      return { success: false, error: 'Database error creating role' };
+      console.error('Error setting admin role:', insertError);
+      return { success: false, error: 'Failed to set admin role' };
     }
-    
-    // Also update user metadata
-    try {
-      await supabase.auth.updateUser({
-        data: { is_admin: true }
-      });
-    } catch (updateError) {
-      console.error('Error updating user metadata:', updateError);
-    }
-    
-    console.log(`User ${userEmail} has been granted admin role.`);
-    return { success: true, message: 'Admin role granted' };
-    
+
+    return { success: true };
   } catch (error) {
-    console.error('Unexpected error setting up admin user:', error);
-    return { success: false, error: 'Unexpected error' };
+    console.error('Error in setAdmin:', error);
+    return { success: false, error: 'An unexpected error occurred' };
   }
-}
+};
 
 /**
- * Check if a user is an admin with a single source of truth
+ * Check if a user has admin role
+ * Single source of truth for admin verification
  */
 export async function checkIsAdmin(userId: string): Promise<boolean> {
   try {
     console.log(`Verifying admin status for user ${userId}...`);
     
-    // Single source of truth: user_roles table
+    // Check user_roles table for admin role
     const { error } = await supabase
       .from('user_roles')
       .select('role')
@@ -140,42 +163,104 @@ export async function checkIsAdmin(userId: string): Promise<boolean> {
   }
 }
 
+// List of known admin email addresses
+const KNOWN_ADMIN_EMAILS = ['blitzkirg21@gmail.com', 'johnfloydmarticio212005@gmail.com']
+
 /**
  * Create admin role for a user
+ * This function:
+ * 1. Verifies the user exists
+ * 2. Checks if they're in the known admin list
+ * 3. Creates the admin role if authorized
  */
-export async function createAdminRole(userId: string): Promise<{ success: boolean; error?: any }> {
+export async function createAdminRole(userId: string): Promise<{ success: boolean; error?: any; message?: string }> {
   try {
     console.log(`Creating admin role for user ${userId}...`);
     
-    // Insert admin role directly into user_roles table
+    // Verify user exists in profiles table
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .eq('id', userId)
+      .single();
+    
+    if (profileError || !profileData) {
+      console.error('Error verifying user:', profileError);
+      return { success: false, error: 'User not found' };
+    }
+    
+    const userEmail = profileData.email;
+    
+    // Security check: verify user is in known admin list
+    if (!KNOWN_ADMIN_EMAILS.includes(userEmail || '')) {
+      console.error('Unauthorized attempt to create admin role');
+      return { success: false, error: 'Unauthorized' };
+    }
+    
+    // Check if role already exists
+    const { data: existingRole, error: checkError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'admin')
+      .maybeSingle();
+    
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Error checking existing role:', checkError);
+      return { success: false, error: 'Database error checking role' };
+    }
+    
+    if (existingRole) {
+      console.log('Admin role already exists');
+      return { success: true, message: 'Admin role already exists' };
+    }
+    
+    // Create admin role
     const { error: insertError } = await supabase
       .from('user_roles')
-      .upsert({
+      .insert({
         user_id: userId,
-        role: 'admin',
-        created_at: new Date().toISOString()
+        role: 'admin'
       });
     
     if (insertError) {
-      console.error('Error creating admin role:', insertError);
-      return { success: false, error: insertError };
+      console.error('Error inserting role:', insertError);
+      return { success: false, error: 'Database error creating role' };
     }
     
-    console.log(`Admin role created for user ${userId}`);
-    return { success: true };
+    console.log(`✅ User ${userEmail} (${userId}) has been granted admin role.`);
+    return { success: true, message: 'Admin role granted' };
   } catch (error) {
-    console.error('Error creating admin role:', error);
-    return { success: false, error };
+    console.error('Unexpected error creating admin role:', error);
+    return { success: false, error: 'Unexpected error' };
   }
 }
 
 /**
  * Revoke admin role from a user
+ * This function:
+ * 1. Finds the user by email
+ * 2. Removes their admin role from user_roles table
  */
-export async function revokeAdminRole(userId: string): Promise<{ success: boolean; error?: any }> {
+export async function revokeAdminRole(userEmail: string): Promise<{ success: boolean; error?: any }> {
   try {
-    console.log(`Revoking admin role from user ${userId}...`);
+    console.log(`Revoking admin role from user ${userEmail}...`);
     
+    // Get user ID from email
+    const { data: userData, error: userError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', userEmail)
+      .single();
+    
+    if (userError || !userData) {
+      console.error('User not found:', userError);
+      return { success: false, error: 'User not found' };
+    }
+    
+    const userId = userData.id;
+    
+    // Remove admin role
     const { error } = await supabase
       .from('user_roles')
       .delete()
@@ -187,7 +272,7 @@ export async function revokeAdminRole(userId: string): Promise<{ success: boolea
       return { success: false, error };
     }
     
-    console.log(`Admin role revoked from user ${userId}`);
+    console.log(`Admin role revoked from user ${userEmail}`);
     return { success: true };
   } catch (error) {
     console.error('Error revoking admin role:', error);
@@ -196,7 +281,8 @@ export async function revokeAdminRole(userId: string): Promise<{ success: boolea
 }
 
 /**
- * Get all admin users
+ * Get all users with admin role
+ * Returns an array of user IDs who have admin privileges
  */
 export async function getAdminUsers(): Promise<{ success: boolean; adminUsers: Array<{ userId: string }>; error?: any }> {
   try {
@@ -224,14 +310,17 @@ export async function getAdminUsers(): Promise<{ success: boolean; adminUsers: A
 }
 
 /**
- * Check if an email has admin access by looking it up in the profiles table
- * and checking if that user ID is in the user_roles table with role 'admin'
+ * Check if an email has admin access
+ * This function performs multiple checks:
+ * 1. Checks profiles table
+ * 2. Checks auth.users table
+ * 3. Checks user_roles table
  */
 export async function checkAdminByEmail(email: string): Promise<boolean> {
   try {
     console.log(`Checking if ${email} has admin access...`);
     
-    // First find the user ID from the email in profiles table
+    // Check profiles table first
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .select('id')
@@ -243,16 +332,14 @@ export async function checkAdminByEmail(email: string): Promise<boolean> {
       return false;
     }
     
-    // If profile found, check if that ID has admin role
+    // If profile found, check admin role
     if (profileData && profileData.id) {
       console.log(`Found profile ID ${profileData.id} for email ${email}`);
       return await checkAdminById(profileData.id);
     }
     
-    // If no profile, check directly in auth.users
-    // This is a more direct way to find users by email
+    // Fallback: check auth.users table
     try {
-      // Supabase doesn't have a direct getUserByEmail API, so we need to list users
       const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
       
       if (authError || !authData) {
@@ -260,30 +347,29 @@ export async function checkAdminByEmail(email: string): Promise<boolean> {
         return false;
       }
       
-      // Find user with matching email
+      // Find user by email
       const user = authData.users.find(u => u.email === email);
       if (!user) {
         console.log(`No user found with email: ${email} in auth`);
         return false;
       }
       
-      // If user found, check if they have admin role
+      // Check admin role for found user
       console.log(`Found user ID ${user.id} for email ${email} in auth`);
       return await checkAdminById(user.id);
     } catch (error) {
       console.error('Error checking user in auth:', error);
     }
     
-    // Final fallback: check in any user with this email in user_roles
+    // Final check: user_roles table
     try {
-      // Attempt to find any user with admin role that has metadata with this email
       const { data: roleUsers, error: roleError } = await supabase
         .from('user_roles')
         .select('user_id')
         .eq('role', 'admin');
       
       if (!roleError && roleUsers && roleUsers.length > 0) {
-        // Found users with admin role, check if any match this email
+        // Check each admin user for matching email
         for (const user of roleUsers) {
           const { data: authUser } = await supabase.auth.admin.getUserById(user.user_id);
           if (authUser && authUser.user && authUser.user.email === email) {
@@ -306,14 +392,14 @@ export async function checkAdminByEmail(email: string): Promise<boolean> {
 
 /**
  * Check if a user ID has admin role
+ * This is a helper function used by other admin verification methods
  */
 export async function checkAdminById(userId: string): Promise<boolean> {
   try {
     console.log(`Checking if user ID ${userId} has admin role...`);
     
-    // Check if user_roles table exists
+    // Check user_roles table
     try {
-      // Check if user has admin role
       const { data: roleData, error: roleError } = await supabase
         .from('user_roles')
         .select('role')
@@ -326,16 +412,7 @@ export async function checkAdminById(userId: string): Promise<boolean> {
           console.log('No admin role found for user');
           return false;
         } else if (roleError.code === '42P01') {
-          // Table doesn't exist
           console.error('user_roles table does not exist');
-          
-          // Check if this is a known admin ID
-          const knownAdminIds = ['336187fc-3f85-4de9-9df4-f5d42e5c0b92'];
-          if (knownAdminIds.includes(userId)) {
-            console.log('User is a known admin ID');
-            return true;
-          }
-          
           return false;
         } else {
           console.error('Error checking admin role:', roleError);
@@ -359,6 +436,7 @@ export async function checkAdminById(userId: string): Promise<boolean> {
 
 /**
  * Initialize storage buckets for the application
+ * This is a placeholder function as bucket creation requires admin privileges
  */
 export async function initializeStorage() {
   try {

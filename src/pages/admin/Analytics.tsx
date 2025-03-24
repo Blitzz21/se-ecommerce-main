@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Helmet } from 'react-helmet-async';
 import { HiCurrencyDollar, HiShoppingCart, HiUsers, HiTag, HiTrendingUp } from 'react-icons/hi';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 // Analytics data types
 interface AnalyticsData {
@@ -22,6 +23,7 @@ interface AnalyticsData {
 
 const Analytics = () => {
   const [loading, setLoading] = useState(true);
+  const { format } = useCurrency();
   const [data, setData] = useState<AnalyticsData>({
     totalSales: 0,
     totalOrders: 0,
@@ -157,14 +159,6 @@ const Analytics = () => {
     fetchAnalytics(timeRange);
   }, [timeRange]);
 
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
-
   // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -238,7 +232,7 @@ const Analytics = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Sales</p>
-                  <p className="text-2xl font-semibold text-gray-900">{formatCurrency(data.totalSales)}</p>
+                  <div className="text-2xl font-semibold text-gray-900">{format(data.totalSales)}</div>
                 </div>
               </div>
             </div>
@@ -264,7 +258,7 @@ const Analytics = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Avg. Order Value</p>
-                  <p className="text-2xl font-semibold text-gray-900">{formatCurrency(data.averageOrderValue)}</p>
+                  <div className="text-2xl font-semibold text-gray-900">{format(data.averageOrderValue)}</div>
                 </div>
               </div>
             </div>
@@ -346,7 +340,7 @@ const Analytics = () => {
                           }`}>
                             {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                           </span>
-                          <p className="text-sm font-medium text-gray-900 mt-1">{formatCurrency(order.total)}</p>
+                          <p className="text-sm font-medium text-gray-900 mt-1">{format(order.total)}</p>
                         </div>
                       </div>
                     </div>
@@ -389,11 +383,11 @@ const Analytics = () => {
                             {product.sale?.active
                               ? <span>
                                   <span className="text-gray-400 line-through mr-1">
-                                    ${product.price.toFixed(2)}
+                                    {format(product.price)}
                                   </span>
-                                  ${(product.price * (1 - product.sale.percentage / 100)).toFixed(2)}
+                                  {format(product.price * (1 - product.sale.percentage / 100))}
                                 </span>
-                              : `$${product.price.toFixed(2)}`
+                              : format(product.price)
                             }
                           </p>
                         </div>
@@ -415,7 +409,7 @@ const Analytics = () => {
                 <div className="w-full h-full p-4">
                   <div className="flex justify-between mb-2">
                     <p className="text-sm text-gray-500">Date Range: {formatDate(data.salesByDay[0]?.date)} - {formatDate(data.salesByDay[data.salesByDay.length - 1]?.date)}</p>
-                    <p className="text-sm text-gray-500">Total: {formatCurrency(data.totalSales)}</p>
+                    <p className="text-sm text-gray-500">Total: {format(data.totalSales)}</p>
                   </div>
                   <div className="flex items-end h-40 w-full overflow-x-auto">
                     {data.salesByDay.map((day, index) => {
@@ -424,7 +418,7 @@ const Analytics = () => {
                       
                       return (
                         <div key={index} className="flex flex-col items-center mx-2 first:ml-0 last:mr-0" style={{ minWidth: '60px' }}>
-                          <div className="text-xs text-gray-500 mb-1">{formatCurrency(day.total)}</div>
+                          <div className="text-xs text-gray-500 mb-1">{format(day.total)}</div>
                           <div 
                             className="w-8 bg-green-500 rounded-t"
                             style={{ height: `${Math.max(height, 5)}%` }}

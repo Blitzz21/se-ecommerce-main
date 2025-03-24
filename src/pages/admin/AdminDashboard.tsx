@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -6,6 +6,7 @@ import { HiPlus, HiViewGrid, HiChartBar, HiShoppingCart, HiStar, HiCurrencyDolla
 import { Helmet } from 'react-helmet-async';
 import { toast } from 'react-hot-toast';
 import { initDb, setAdmin, revokeAdminRole, initializeStorage } from '../../lib/dbInit';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 // Types for cart items and admin users
 interface CartItem {
@@ -49,6 +50,7 @@ interface Analytics {
 
 export const AdminDashboard = () => {
   const { isAdmin, getAllAdmins } = useAuth();
+  const { format } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState<Analytics>({
     totalOrders: 0,
@@ -82,7 +84,142 @@ export const AdminDashboard = () => {
     }
   };
 
+  // Memoize fetchAnalytics to prevent recreation on every render
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      setLoading(true);
+      let allOrders: OrderData[] = [];
+      
+      // Get orders from Supabase
+      const { data: supabaseOrders, error } = await supabase
+        .from('orders')
+        .select('*');
+      
+      if (error) {
+        console.error('Error fetching orders from Supabase:', error);
+      } else if (supabaseOrders && supabaseOrders.length > 0) {
+        console.log('Orders found in Supabase for analytics:', supabaseOrders.length);
+        allOrders = [...supabaseOrders];
+      }
+      
+      // Calculate analytics
+      const totalOrders = allOrders.length;
+      const totalRevenue = allOrders.reduce((sum, order) => sum + (parseFloat(order.total as string) || 0), 0);
+      const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+      
+      // Fetch real-time cart items data to show most added to cart
+      const { data: cartItems, error: cartError } = await supabase
+        .from('cart_items')
+        .select('product_id, product_name, quantity')
+        .order('created_at', { ascending: false });
+
+      if (cartError) {
+        console.error('Error fetching cart items:', cartError);
+      } else if (cartItems && cartItems.length > 0) {
+        console.log('Cart items found:', cartItems.length);
+        
+        // Aggregate quantities for the same product across all carts
+        const productQuantities: { [key: string]: { product_id: string, product_name: string, quantity: number } } = {};
+        
+        cartItems.forEach(item => {
+          if (!productQuantities[item.product_id]) {
+            productQuantities[item.product_id] = {
+              product_id: item.product_id,
+              product_name: item.product_name,
+              quantity: 0
+            };
+          }
+          productQuantities[item.product_id].quantity += item.quantity || 1;
+        });
+        
+        // Convert to array and sort by quantity
+        const realtimeTopProducts = Object.values(productQuantities)
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 5);
+        
+        console.log('Most added to cart products:', realtimeTopProducts);
+        setTopProducts(realtimeTopProducts);
+      } else {
+        console.log('No cart items found, setting empty array');
+        setTopProducts([]);
+      }
+      
+      // Set all analytics data
+      setAnalytics({
+        totalOrders,
+        totalRevenue,
+        averageOrderValue,
+        topProducts: topProducts.map(p => ({
+          id: p.product_id,
+          name: p.product_name,
+          count: p.quantity || 0
+        }))
+      });
+      
+      // Fetch highest rated products
+      const { data: highestRatedProducts, error: ratingError } = await supabase
+        .from('products')
+        .select('id, name, image, rating')
+        .order('rating', { ascending: false })
+        .limit(5);
+        
+      if (ratingError) {
+        console.error('Error fetching highest rated products:', ratingError);
+      } else {
+        setTopRated(highestRatedProducts || []);
+      }
+      
+      // Calculate best selling products based on order data
+      const productSales: { [key: string]: { 
+        id: string, 
+        name: string, 
+        sales: number, 
+        revenue: number 
+      }} = {};
+      
+      allOrders.forEach(order => {
+        if (order.status !== 'cancelled' && order.items && Array.isArray(order.items)) {
+          order.items.forEach(item => {
+            if (item.product_id) {
+              if (!productSales[item.product_id]) {
+                productSales[item.product_id] = {
+                  id: item.product_id,
+                  name: item.product_name || 'Unknown Product',
+                  sales: 0,
+                  revenue: 0
+                };
+              }
+              
+              const quantity = item.quantity || 1;
+              const price = item.price || 0;
+              
+              productSales[item.product_id].sales += quantity;
+              productSales[item.product_id].revenue += quantity * price;
+            }
+          });
+        }
+      });
+      
+      const bestSellingProducts = Object.values(productSales)
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 5);
+      
+      setBestSellers(bestSellingProducts);
+      
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+      toast.error('Failed to load analytics data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Combined useEffect for initial data loading and realtime subscriptions
   useEffect(() => {
+    if (!isAdmin) return;
+
+    let mounted = true;
+
     const loadInitialData = async () => {
       try {
         setLoading(true);
@@ -95,28 +232,25 @@ export const AdminDashboard = () => {
           console.error('Failed to initialize storage:', storageError);
         }
         
-        // Fetch analytics data
-        await Promise.all([
-          fetchAnalytics(),
-          loadAdminUsers()
-        ]);
+        // Fetch analytics data and load admin users
+        if (mounted) {
+          await Promise.all([
+            fetchAnalytics(),
+            loadAdminUsers()
+          ]);
+        }
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    if (isAdmin) {
-      loadInitialData();
-    }
-  }, [isAdmin, getAllAdmins]);
+    loadInitialData();
 
-  useEffect(() => {
-    // Initial fetch
-    fetchAnalytics();
-
-    // Set up realtime subscription for orders (to update analytics)
+    // Set up realtime subscriptions
     const ordersSubscription = supabase
       .channel('admin-analytics-channel')
       .on('postgres_changes', 
@@ -127,13 +261,13 @@ export const AdminDashboard = () => {
         }, 
         (payload: any) => {
           console.log('Admin analytics realtime update received:', payload);
-          // Refresh analytics when orders change
-          fetchAnalytics();
+          if (mounted) {
+            fetchAnalytics();
+          }
         }
       )
       .subscribe();
     
-    // Set up realtime subscription for cart items (to update most added to cart)
     const cartSubscription = supabase
       .channel('admin-cart-channel')
       .on('postgres_changes',
@@ -144,18 +278,20 @@ export const AdminDashboard = () => {
         },
         (payload: any) => {
           console.log('Cart items realtime update received:', payload);
-          // Refresh analytics when cart items change
-          fetchAnalytics();
+          if (mounted) {
+            fetchAnalytics();
+          }
         }
       )
       .subscribe();
 
-    // Cleanup subscription on unmount
+    // Cleanup subscriptions on unmount
     return () => {
+      mounted = false;
       supabase.removeChannel(ordersSubscription);
       supabase.removeChannel(cartSubscription);
     };
-  }, []);
+  }, [isAdmin, fetchAnalytics]); // Only re-run if isAdmin or fetchAnalytics changes
 
   if (!isAdmin) {
     return (
@@ -242,27 +378,23 @@ export const AdminDashboard = () => {
   const performRevokeAdmin = async (email: string) => {
     if (!email) return;
     
-    if (!confirm(`Are you sure you want to revoke admin access from ${email}?`)) {
-      return;
-    }
-    
     try {
       setRevokingAdmin(true);
       const result = await revokeAdminRole(email);
       
       if (result.success) {
         toast.success(`Admin role revoked from ${email}`);
-        setRevokeEmail('');
         // Reload admin list
         loadAdminUsers();
       } else {
-        toast.error(result.error || 'Failed to revoke admin access');
+        toast.error(result.error || 'Failed to revoke admin role');
       }
     } catch (error) {
-      console.error('Error revoking admin access:', error);
-      toast.error('Failed to revoke admin access');
+      console.error('Error revoking admin role:', error);
+      toast.error('Failed to revoke admin role');
     } finally {
       setRevokingAdmin(false);
+      setRevokeEmail('');
     }
   };
 
@@ -349,210 +481,6 @@ export const AdminDashboard = () => {
     </div>
   );
 
-  // Add the fetchAnalytics function definition
-  const fetchAnalytics = async () => {
-    try {
-      setLoading(true);
-      let allOrders: OrderData[] = [];
-      
-      // Get orders from Supabase
-      const { data: supabaseOrders, error } = await supabase
-        .from('orders')
-        .select('*');
-      
-      if (error) {
-        console.error('Error fetching orders from Supabase:', error);
-      } else if (supabaseOrders && supabaseOrders.length > 0) {
-        console.log('Orders found in Supabase for analytics:', supabaseOrders.length);
-        allOrders = [...supabaseOrders];
-      }
-      
-      // Calculate analytics
-      const totalOrders = allOrders.length;
-      const totalRevenue = allOrders.reduce((sum, order) => sum + (parseFloat(order.total as string) || 0), 0);
-      const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-      
-      // Get top products from orders (Most Added to Cart)
-      const productCounts: { [key: string]: { count: number, name: string } } = {};
-      allOrders.forEach(order => {
-        if (order.items && Array.isArray(order.items)) {
-          order.items.forEach(item => {
-            if (item.product_id) {
-              if (!productCounts[item.product_id]) {
-                productCounts[item.product_id] = { 
-                  count: 0, 
-                  name: item.product_name || 'Unknown Product' 
-                };
-              }
-              productCounts[item.product_id].count += item.quantity || 1;
-            }
-          });
-        }
-      });
-      
-      // Convert to array and sort by popularity
-      const topProducts = Object.entries(productCounts)
-        .map(([id, data]) => ({
-          id,
-          name: data.name,
-          count: data.count
-        }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5); // Top 5
-      
-      // Set all analytics data
-      setAnalytics({
-        totalOrders,
-        totalRevenue,
-        averageOrderValue,
-        topProducts
-      });
-      
-      // Fetch highest rated products from the database
-      const { data: highestRatedProducts, error: ratingError } = await supabase
-        .from('products')
-        .select('id, name, image, rating')
-        .order('rating', { ascending: false })
-        .limit(5);
-        
-      if (ratingError) {
-        console.error('Error fetching highest rated products:', ratingError);
-      } else {
-        setTopRated(highestRatedProducts || []);
-      }
-      
-      // Calculate best selling products based on order data
-      const productSales: { [key: string]: { 
-        id: string, 
-        name: string, 
-        sales: number, 
-        revenue: number 
-      }} = {};
-      
-      allOrders.forEach(order => {
-        if (order.status !== 'cancelled' && order.items && Array.isArray(order.items)) {
-          order.items.forEach(item => {
-            if (item.product_id) {
-              if (!productSales[item.product_id]) {
-                productSales[item.product_id] = {
-                  id: item.product_id,
-                  name: item.product_name || 'Unknown Product',
-                  sales: 0,
-                  revenue: 0
-                };
-              }
-              
-              const quantity = item.quantity || 1;
-              const price = item.price || 0;
-              
-              productSales[item.product_id].sales += quantity;
-              productSales[item.product_id].revenue += quantity * price;
-            }
-          });
-        }
-      });
-      
-      const bestSellingProducts = Object.values(productSales)
-        .sort((a, b) => b.sales - a.sales)
-        .slice(0, 5);
-      
-      // If no sales data available, use review data as a proxy for popularity
-      if (bestSellingProducts.length === 0) {
-        try {
-          const { data: mostReviewedProducts, error } = await supabase
-            .from('products')
-            .select('id, name, reviews, price')
-            .gt('reviews', 0)
-            .order('reviews', { ascending: false })
-            .limit(5);
-            
-          if (error) {
-            console.error('Error fetching most reviewed products:', error);
-          } else if (mostReviewedProducts && mostReviewedProducts.length > 0) {
-            // Use review count as a proxy for sales popularity
-            const salesFromReviews = mostReviewedProducts.map(product => {
-              // Use actual product data to estimate sales
-              const reviews = product.reviews || 0;
-              const price = product.price || 0;
-              // Estimate: each review represents approximately 10 sales
-              const estimatedSales = Math.max(1, Math.round(reviews * 10));
-              return {
-                id: product.id,
-                name: product.name,
-                sales: estimatedSales,
-                revenue: estimatedSales * price
-              };
-            });
-            setBestSellers(salesFromReviews);
-            return; // Skip the standard setBestSellers below
-          }
-        } catch (err) {
-          console.error('Error in fallback best sellers fetch:', err);
-        }
-      }
-
-      setBestSellers(bestSellingProducts);
-      
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
-      toast.error('Failed to load analytics data');
-      
-      // Last resort fallbacks - only fetch real data from database if all else fails
-      try {
-        console.log('Attempting last resort fallbacks with real database data...');
-        
-        // For Most Added to Cart
-        if (topProducts.length === 0) {
-          const { data: products } = await supabase
-            .from('products')
-            .select('id, name, stock')
-            .limit(5);
-            
-          if (products && products.length > 0) {
-            setTopProducts(products.map(p => ({
-              product_id: p.id,
-              product_name: p.name,
-              quantity: p.stock || 0
-            })));
-          }
-        }
-        
-        // For Highest Rated
-        if (topRated.length === 0) {
-          const { data: products } = await supabase
-            .from('products')
-            .select('id, name, image, rating')
-            .limit(5);
-            
-          if (products && products.length > 0) {
-            setTopRated(products);
-          }
-        }
-        
-        // For Best Sellers
-        if (bestSellers.length === 0) {
-          const { data: products } = await supabase
-            .from('products')
-            .select('id, name, price')
-            .limit(5);
-            
-          if (products && products.length > 0) {
-            setBestSellers(products.map(p => ({
-              id: p.id,
-              name: p.name,
-              sales: 0,
-              revenue: 0
-            })));
-          }
-        }
-      } catch (fallbackError) {
-        console.error('Even fallback data fetching failed:', fallbackError);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Helmet>
@@ -609,7 +537,7 @@ export const AdminDashboard = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                  <p className="text-xl font-semibold">${analytics.totalRevenue.toFixed(2)}</p>
+                  <p className="text-xl font-semibold">{format(analytics.totalRevenue)}</p>
                 </div>
               </div>
             </div>
@@ -621,7 +549,7 @@ export const AdminDashboard = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Avg. Order Value</p>
-                  <p className="text-xl font-semibold">${analytics.averageOrderValue.toFixed(2)}</p>
+                  <p className="text-xl font-semibold">{format(analytics.averageOrderValue)}</p>
                 </div>
               </div>
             </div>
@@ -725,7 +653,7 @@ export const AdminDashboard = () => {
                         <p className="text-sm truncate">{product.name}</p>
                         <div className="text-right">
                           <p className="text-sm text-gray-900">{product.sales || 0} units</p>
-                          <p className="text-xs text-gray-500">${(product.revenue || 0).toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">{format(product.revenue || 0)}</p>
                         </div>
                       </li>
                     ))
