@@ -28,8 +28,12 @@ const Cart = () => {
   const { format } = useCurrency();
 
   useEffect(() => {
+    // Redirect to login if not authenticated
     if (!user) {
-      navigate('/login', { replace: true });
+      navigate('/login', { 
+        replace: true,
+        state: { from: '/cart' }
+      });
       return;
     }
 
@@ -63,6 +67,9 @@ const Cart = () => {
     setIsSelectingAll(allSelected);
   }, [user, navigate, cartItems]);
 
+  // If not authenticated, don't render anything (will be redirected)
+  if (!user) return null;
+
   const handleToggleSelectAll = () => {
     const newSelectAllState = !isSelectingAll;
     setIsSelectingAll(newSelectAllState);
@@ -73,13 +80,15 @@ const Cart = () => {
     toggleItemSelection(itemId, selected);
   };
 
-  // Move this after the useEffect
-  if (!user) return null;
   if (isLoading) return (
     <div className="flex justify-center items-center min-h-screen">
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
     </div>
   );
+
+  if (cartItems.length === 0) {
+    return <EmptyState message="Your cart is empty" />;
+  }
 
   const handleQuantityChange = async (itemId: string, productId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -96,10 +105,6 @@ const Cart = () => {
 
     await updateQuantity(itemId, newQuantity);
   };
-
-  if (cartItems.length === 0) {
-    return <EmptyState message="Your cart is empty" />;
-  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

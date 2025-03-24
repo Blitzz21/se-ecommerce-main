@@ -62,16 +62,7 @@ const AccountPage = () => {
 
         if (error) {
           console.error('Error fetching orders for account page:', error);
-          
-          // If we get a 404 or other error, try to use demo orders from localStorage
-          const demoOrdersString = window.localStorage.getItem('demoOrders');
-          if (demoOrdersString) {
-            const demoOrders = JSON.parse(demoOrdersString);
-            setOrders(demoOrders.filter((order: Order) => order.user_id === user.id) || []);
-            console.log('Using demo orders from localStorage for account page');
-          } else {
-            setOrders([]);
-          }
+          setOrders([]);
         } else {
           setOrders(data || []);
         }
@@ -85,6 +76,42 @@ const AccountPage = () => {
     };
 
     fetchOrders();
+
+    // Set up realtime subscription
+    const ordersSubscription = supabase
+      .channel('account-orders-channel')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'orders',
+          filter: `user_id=eq.${user.id}`
+        }, 
+        (payload) => {
+          console.log('Account page realtime update received:', payload);
+          
+          // Handle different types of changes
+          if (payload.eventType === 'INSERT') {
+            setOrders(prevOrders => [payload.new as Order, ...prevOrders]);
+          } else if (payload.eventType === 'UPDATE') {
+            setOrders(prevOrders => 
+              prevOrders.map(order => 
+                order.id === payload.new.id ? (payload.new as Order) : order
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setOrders(prevOrders => 
+              prevOrders.filter(order => order.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+    };
   }, [user, navigate]);
 
   const handleLogout = async () => {

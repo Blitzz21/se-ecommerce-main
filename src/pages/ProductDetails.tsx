@@ -91,19 +91,28 @@ const ProductDetails = () => {
     }
   }
   
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (product) {
-      // Add to cart with the user-selected quantity
-      addToCart({
-        ...product,
-        brand: product.brand as any,
-        category: product.category as any,
-        badge: product.badge as any,
-        sale: product.sale as any,
-        quantity: quantity // Pass the selected quantity
-      });
-      
-      toast.success(`${product.name} added to cart`);
+      try {
+        // Add to cart with the user-selected quantity
+        await addToCart({
+          ...product,
+          brand: product.brand as any,
+          category: product.category as any,
+          badge: product.badge as any,
+          sale: product.sale as any,
+          quantity: quantity // Pass the selected quantity
+        });
+        
+        toast.success(`${product.name} added to cart`);
+      } catch (error: any) {
+        if (error.message === 'AUTH_REQUIRED') {
+          // Redirect to login page with return path
+          navigate('/login', { 
+            state: { from: window.location.pathname }
+          });
+        }
+      }
     }
   }
   

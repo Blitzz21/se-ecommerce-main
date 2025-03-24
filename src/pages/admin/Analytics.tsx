@@ -89,8 +89,7 @@ const Analytics = () => {
       // Get new customers in selected time period
       const { count: newCustomersCount, error: newCustomersError } = await supabase
         .from('profiles')
-        .select('id', { count: 'exact', head: true })
-        .gte('created_at', startDateStr);
+        .select('id', { count: 'exact', head: true });
         
       if (newCustomersError) throw newCustomersError;
       

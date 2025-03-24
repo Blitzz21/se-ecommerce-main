@@ -22,7 +22,7 @@ export const initializeOrders = async () => {
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             user_id UUID NOT NULL,
             total DECIMAL(10,2) NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
+            status TEXT NOT NULL DEFAULT 'paid',
             items JSONB NOT NULL,
             billing_address JSONB,
             customer_name TEXT,
@@ -37,34 +37,15 @@ export const initializeOrders = async () => {
       
       if (createError) {
         console.error('Error creating orders table via RPC:', createError)
-        
-        // If SQL RPC fails, try localStorage fallback
-        console.log('Falling back to localStorage for orders storage')
-        
-        // Check if demo orders already exist
-        if (!window.localStorage.getItem('demoOrders')) {
-          // Initialize empty demo orders array
-          window.localStorage.setItem('demoOrders', JSON.stringify([]))
-          console.log('Initialized empty demoOrders in localStorage')
-        }
       } else {
         console.log('Orders table created successfully')
       }
     } else if (checkError) {
       console.error('Error checking orders table:', checkError)
-      // Fallback to localStorage
-      console.log('Using localStorage for orders')
-      if (!window.localStorage.getItem('demoOrders')) {
-        window.localStorage.setItem('demoOrders', JSON.stringify([]))
-      }
     } else {
       console.log('Orders table already exists')
     }
   } catch (error) {
     console.error('Unexpected error during orders initialization:', error)
-    // Ensure localStorage fallback is ready
-    if (!window.localStorage.getItem('demoOrders')) {
-      window.localStorage.setItem('demoOrders', JSON.stringify([]))
-    }
   }
 } 

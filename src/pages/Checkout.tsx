@@ -231,6 +231,7 @@ const CheckoutForm = () => {
         status: 'paid',
         items: orderItems,
         billing_address: billingDetails,
+        shipping_address: billingDetails,
         customer_name: name,
         customer_email: user.email || '',
         payment_id: paymentId,
@@ -246,21 +247,12 @@ const CheckoutForm = () => {
 
       if (orderError) {
         console.error('Error creating order in Supabase:', orderError);
-        
-        // If database error, store in localStorage
-        const demoOrdersString = window.localStorage.getItem('demoOrders');
-        let demoOrders = [];
-        
-        if (demoOrdersString) {
-          demoOrders = JSON.parse(demoOrdersString);
-        }
-        
-        demoOrders.push(order);
-        window.localStorage.setItem('demoOrders', JSON.stringify(demoOrders));
-        console.log('Order stored in localStorage:', order);
-      } else {
-        console.log('Order successfully saved in Supabase:', order.id);
+        toast.error('Failed to place order');
+        setLoading(false);
+        return;
       }
+
+      console.log('Order successfully saved in Supabase:', order.id);
 
       // Remove purchased items from cart
       for (const item of selectedItems) {
@@ -268,7 +260,7 @@ const CheckoutForm = () => {
       }
 
       toast.success('Order placed successfully!');
-      navigate('/dashboard');
+      navigate('/orders');
     } catch (error) {
       console.error('Error placing order:', error);
       toast.error('Failed to place order');

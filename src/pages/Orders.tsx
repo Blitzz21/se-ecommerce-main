@@ -16,7 +16,7 @@ interface Order {
   id: string;
   user_id: string;
   total: number;
-  status: string;
+  status: 'paid' | 'processing' | 'processed' | 'shipping' | 'delivering' | 'delivered' | 'cancelled';
   items: OrderItem[];
   billing_address: {
     line1: string;
@@ -39,6 +39,17 @@ const Orders = () => {
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
 
+  // Status badge color map
+  const statusColors = {
+    paid: 'bg-yellow-100 text-yellow-800',
+    processing: 'bg-blue-100 text-blue-800',
+    processed: 'bg-indigo-100 text-indigo-800',
+    shipping: 'bg-purple-100 text-purple-800',
+    delivering: 'bg-teal-100 text-teal-800',
+    delivered: 'bg-green-100 text-green-800',
+    cancelled: 'bg-red-100 text-red-800'
+  };
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
@@ -48,9 +59,8 @@ const Orders = () => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        let finalOrders: Order[] = [];
         
-        // Try to fetch from Supabase
+        // Only fetch from Supabase
         const { data: supabaseOrders, error } = await supabase
           .from('orders')
           .select('*')
@@ -59,46 +69,13 @@ const Orders = () => {
 
         if (error) {
           console.error('Error fetching orders from Supabase:', error);
+          setOrders([]);
         } else if (supabaseOrders && supabaseOrders.length > 0) {
           console.log('Orders found in Supabase:', supabaseOrders.length);
-          finalOrders = [...supabaseOrders];
+          setOrders(supabaseOrders);
+        } else {
+          setOrders([]);
         }
-        
-        // Also check localStorage for any orders
-        const demoOrdersString = window.localStorage.getItem('demoOrders');
-        if (demoOrdersString) {
-          const parsedDemoOrders = JSON.parse(demoOrdersString);
-          const localOrders = parsedDemoOrders.filter(
-            (order: { user_id: string }) => order.user_id === user.id || order.user_id === 'demo-user-id'
-          );
-          
-          if (localOrders.length > 0) {
-            console.log('Orders found in localStorage:', localOrders.length);
-            
-            // Check if an order with the same ID exists in finalOrders
-            const uniqueLocalOrders = localOrders.filter(
-              (localOrder: { id: string }) => !finalOrders.some((order) => order.id === localOrder.id)
-            );
-            
-            // Merge orders - use spread to avoid mutating the arrays
-            finalOrders = [...finalOrders, ...uniqueLocalOrders];
-          }
-        }
-        
-        // Set user_id for any demo orders
-        finalOrders = finalOrders.map(order => {
-          if (order.user_id === 'demo-user-id') {
-            return { ...order, user_id: user.id };
-          }
-          return order;
-        });
-        
-        // Sort by date (newest first)
-        finalOrders.sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        
-        setOrders(finalOrders);
       } catch (err) {
         console.error('Error in orders fetch process:', err);
         toast.error('Failed to load order history');
@@ -109,6 +86,42 @@ const Orders = () => {
     };
 
     fetchOrders();
+
+    // Set up realtime subscription
+    const ordersSubscription = supabase
+      .channel('orders-channel')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'orders',
+          filter: `user_id=eq.${user.id}`
+        }, 
+        (payload) => {
+          console.log('Realtime update received:', payload);
+          
+          // Handle different types of changes
+          if (payload.eventType === 'INSERT') {
+            setOrders(prevOrders => [payload.new as Order, ...prevOrders]);
+          } else if (payload.eventType === 'UPDATE') {
+            setOrders(prevOrders => 
+              prevOrders.map(order => 
+                order.id === payload.new.id ? (payload.new as Order) : order
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setOrders(prevOrders => 
+              prevOrders.filter(order => order.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+    };
   }, [user, navigate]);
 
   const formatDate = (dateString: string) => {
@@ -122,6 +135,41 @@ const Orders = () => {
   const viewOrderDetails = (order: Order) => {
     setActiveOrder(order);
     setShowOrderDetails(true);
+  };
+
+  const cancelOrder = async (orderId: string) => {
+    if (!user) {
+      toast.error('You must be logged in to cancel an order');
+      return;
+    }
+    
+    if (!window.confirm('Are you sure you want to cancel this order?')) {
+      return;
+    }
+    
+    try {
+      // Update in Supabase
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', orderId)
+        .eq('user_id', user.id); // Security: ensure user owns this order
+      
+      if (error) {
+        console.error('Error cancelling order in Supabase:', error);
+        toast.error('Failed to cancel order');
+        return;
+      }
+      
+      // Don't update local state - the realtime subscription will handle this
+      toast.success('Order cancelled successfully');
+    } catch (err) {
+      console.error('Error cancelling order:', err);
+      toast.error('Failed to cancel order');
+    }
   };
 
   if (loading) {
@@ -208,13 +256,8 @@ const Orders = () => {
                         ${order.total.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          order.status === 'paid' 
-                            ? 'bg-green-100 text-green-800' 
-                            : order.status === 'processing'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${statusColors[order.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
                           {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                         </span>
                       </td>
@@ -225,6 +268,14 @@ const Orders = () => {
                         >
                           View Details
                         </button>
+                        {(order.status === 'paid' || order.status === 'processing') && (
+                          <button
+                            onClick={() => cancelOrder(order.id)}
+                            className="text-red-600 hover:text-red-900 font-medium ml-2"
+                          >
+                            Cancel
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -266,17 +317,12 @@ const Orders = () => {
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-500">Status</h4>
-                  <p className="mt-1 text-sm text-gray-900">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      activeOrder.status === 'paid' 
-                        ? 'bg-green-100 text-green-800' 
-                        : activeOrder.status === 'processing'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
+                  <div className="flex items-start mb-4">
+                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
+                        ${statusColors[activeOrder.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
                       {activeOrder.status.charAt(0).toUpperCase() + activeOrder.status.slice(1)}
                     </span>
-                  </p>
+                  </div>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-500">Total</h4>

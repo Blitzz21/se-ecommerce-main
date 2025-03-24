@@ -19,7 +19,7 @@ export interface CartItem {
 export interface CartContextType {
   cartItems: CartItem[];
   selectedItems: CartItem[];
-  addToCart: (product: Product & { quantity?: number }) => void;
+  addToCart: (product: Product & { quantity?: number }) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<void>;
   clearCart: () => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
@@ -172,7 +172,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Add to cart
   const addToCart = async (product: Product & { quantity?: number }) => {
     try {
-      const productQuantity = product.quantity || 1; // Use passed quantity or default to 1
+      // Require authentication
+      if (!user) {
+        toast.error('Please log in to add items to cart');
+        // Instead of using navigate, we'll throw an error that the component can handle
+        throw new Error('AUTH_REQUIRED');
+      }
+
+      const productQuantity = product.quantity || 1;
       
       const newItem: CartItem = {
         id: crypto.randomUUID(),
@@ -182,82 +189,62 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         price: product.price,
         image: product.image,
         selected: true,
+        user_id: user.id
       };
 
-      // If user is logged in, add to Supabase
-      if (user) {
-        newItem.user_id = user.id;
+      // Check if product already exists in cart for this user
+      const { data: existingItems, error: fetchError } = await supabase
+        .from('cart_items')
+        .select('*')
+        .eq('product_id', product.id)
+        .eq('user_id', user.id);
+      
+      if (fetchError) throw fetchError;
+      
+      if (existingItems && existingItems.length > 0) {
+        // If product exists, update quantity
+        const existingItem = existingItems[0];
+        const newQuantity = existingItem.quantity + productQuantity;
         
-        // Check if product already exists in cart for this user
-        const { data: existingItems, error: fetchError } = await supabase
+        const { error: updateError } = await supabase
           .from('cart_items')
-          .select('*')
-          .eq('product_id', product.id)
-          .eq('user_id', user.id);
+          .update({ quantity: newQuantity })
+          .eq('id', existingItem.id);
         
-        if (fetchError) throw fetchError;
+        if (updateError) throw updateError;
         
-        if (existingItems && existingItems.length > 0) {
-          // If product exists, update quantity
-          const existingItem = existingItems[0];
-          const newQuantity = existingItem.quantity + productQuantity;
-          
-          const { error: updateError } = await supabase
-            .from('cart_items')
-            .update({ quantity: newQuantity })
-            .eq('id', existingItem.id);
-          
-          if (updateError) throw updateError;
-          
-          // Update local state for immediate UI update
-          setCartItems(prevItems => 
-            prevItems.map(item => 
-              item.id === existingItem.id 
-                ? { ...item, quantity: newQuantity } 
-                : item
-            )
-          );
-        } else {
-          // If product is new, add to cart
-          // Only send fields that exist in the database schema
-          const dbItem = {
-            id: newItem.id,
-            product_id: newItem.product_id,
-            quantity: newItem.quantity,
-            user_id: newItem.user_id,
-            product_name: newItem.product_name,
-            price: newItem.price
-            // Omitting image and selected as they seem to not exist in the DB
-          };
-          
-          const { error } = await supabase.from('cart_items').insert([dbItem]);
-          if (error) throw error;
-          
-          // Update local state
-          setCartItems(prevItems => [...prevItems, newItem]);
-        }
+        // Update local state for immediate UI update
+        setCartItems(prevItems => 
+          prevItems.map(item => 
+            item.id === existingItem.id 
+              ? { ...item, quantity: newQuantity } 
+              : item
+          )
+        );
       } else {
-        // If no user, just update local state
-        setCartItems((prevItems) => {
-          // Check if product already exists in cart
-          const existingItemIndex = prevItems.findIndex(
-            (item) => item.product_id === product.id
-          );
-
-          if (existingItemIndex >= 0) {
-            // If exists, increase quantity
-            const updatedItems = [...prevItems];
-            updatedItems[existingItemIndex].quantity += productQuantity;
-            return updatedItems;
-          } else {
-            // If new, add to cart
-            return [...prevItems, newItem];
-          }
-        });
+        // If product is new, add to cart
+        const dbItem = {
+          id: newItem.id,
+          product_id: newItem.product_id,
+          quantity: newItem.quantity,
+          user_id: newItem.user_id,
+          product_name: newItem.product_name,
+          price: newItem.price
+        };
+        
+        const { error } = await supabase.from('cart_items').insert([dbItem]);
+        if (error) throw error;
+        
+        // Update local state
+        setCartItems(prevItems => [...prevItems, newItem]);
       }
 
       toast.success('Added to cart');
     } catch (error: any) {
+      if (error.message === 'AUTH_REQUIRED') {
+        // Re-throw the auth error to be handled by the component
+        throw error;
+      }
       console.error('Error adding to cart:', error.message);
       toast.error('Failed to add to cart');
     }

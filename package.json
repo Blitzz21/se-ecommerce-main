@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "migrate": "node scripts/run_migrations.js"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
@@ -42,6 +43,7 @@
     "@types/stats.js": "^0.17.3",
     "@types/webxr": "^0.5.21",
     "@vitejs/plugin-react": "^4.3.4",
+    "dotenv": "^16.4.7",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.16",

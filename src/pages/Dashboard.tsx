@@ -48,9 +48,8 @@ const Dashboard = () => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        let finalOrders: Order[] = [];
         
-        // Try to fetch from Supabase
+        // Fetch from Supabase
         const { data: supabaseOrders, error } = await supabase
           .from('orders')
           .select('*')
@@ -59,46 +58,13 @@ const Dashboard = () => {
 
         if (error) {
           console.error('Error fetching orders from Supabase:', error);
+          setOrders([]);
         } else if (supabaseOrders && supabaseOrders.length > 0) {
           console.log('Orders found in Supabase:', supabaseOrders.length);
-          finalOrders = [...supabaseOrders];
+          setOrders(supabaseOrders);
+        } else {
+          setOrders([]);
         }
-        
-        // Also check localStorage for any orders
-        const demoOrdersString = window.localStorage.getItem('demoOrders');
-        if (demoOrdersString) {
-          const parsedDemoOrders = JSON.parse(demoOrdersString);
-          const localOrders = parsedDemoOrders.filter(
-            (order: Order) => order.user_id === user.id || order.user_id === 'demo-user-id'
-          );
-          
-          if (localOrders.length > 0) {
-            console.log('Orders found in localStorage:', localOrders.length);
-            
-            // Check if an order with the same ID exists in finalOrders
-            const uniqueLocalOrders = localOrders.filter(
-              (localOrder: Order) => !finalOrders.some((order) => order.id === localOrder.id)
-            );
-            
-            // Merge orders - use spread to avoid mutating the arrays
-            finalOrders = [...finalOrders, ...uniqueLocalOrders];
-          }
-        }
-        
-        // Set user_id for any demo orders
-        finalOrders = finalOrders.map(order => {
-          if (order.user_id === 'demo-user-id') {
-            return { ...order, user_id: user.id };
-          }
-          return order;
-        });
-        
-        // Sort by date (newest first)
-        finalOrders.sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        
-        setOrders(finalOrders);
       } catch (err) {
         console.error('Error in orders fetch process:', err);
         toast.error('Failed to load order history');
@@ -109,6 +75,42 @@ const Dashboard = () => {
     };
 
     fetchOrders();
+
+    // Set up realtime subscription
+    const ordersSubscription = supabase
+      .channel('dashboard-orders-channel')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'orders',
+          filter: `user_id=eq.${user.id}`
+        }, 
+        (payload) => {
+          console.log('Dashboard realtime update received:', payload);
+          
+          // Handle different types of changes
+          if (payload.eventType === 'INSERT') {
+            setOrders(prevOrders => [payload.new as Order, ...prevOrders]);
+          } else if (payload.eventType === 'UPDATE') {
+            setOrders(prevOrders => 
+              prevOrders.map(order => 
+                order.id === payload.new.id ? (payload.new as Order) : order
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setOrders(prevOrders => 
+              prevOrders.filter(order => order.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+    };
   }, [user, navigate]);
 
   if (loading) {

@@ -7,7 +7,7 @@ import Checkout from './pages/Checkout'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
-import ProtectedRoute from './components/auth/ProtectedRoute'
+import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { LandingPage } from './components/home/LandingPage'
 import { OnSale } from './pages/OnSale'
 import { NewArrivals } from './pages/NewArrivals'
@@ -18,7 +18,7 @@ import ShippingPolicy from './pages/info/ShippingPolicy'
 import ReturnPolicy from './pages/info/ReturnPolicy'
 import TermsOfService from './pages/info/TermsOfService'
 import { useEffect } from 'react'
-import { initDb, createAdminRole } from './lib/dbInit'
+import { initDb, createAdminRole, checkAdminByEmail } from './lib/dbInit'
 import AccountPage from './pages/AccountPage'
 import Orders from './pages/Orders'
 import { Toaster } from 'react-hot-toast'
@@ -27,7 +27,7 @@ import { CurrencyProvider } from './contexts/CurrencyContext'
 import { Footer } from './components/layout/Footer'
 import { Navbar } from './components/layout/Navbar'
 import AdminRoute from './components/auth/AdminRoute'
-import AdminDashboard from './pages/admin/AdminDashboard'
+import { AdminDashboard } from './pages/admin/AdminDashboard'
 import ProductForm from './pages/admin/ProductForm'
 import Products from './pages/Products'
 import ProductList from './pages/admin/ProductList'
@@ -53,10 +53,21 @@ function App() {
           const userId = sessionData.session.user.id;
           console.log('Current user ID:', userId);
           
+          // Explicitly list known admin IDs for fallback
+          const knownAdminIds = [
+            '336187fc-3f85-4de9-9df4-f5d42e5c0b92'  // johnfloydmarticio212005@gmail.com
+          ];
+          
           // If this is our known admin, ensure they have the role
-          if (userId === '336187fc-3f85-4de9-9df4-f5d42e5c0b92') {
+          if (knownAdminIds.includes(userId)) {
             await createAdminRole(userId);
-            console.log('Admin role enforced for current user');
+            console.log('Admin role enforced for known admin user');
+          } else if (sessionData.session.user.email) {
+            // Check if the user's email is in the admin list
+            const isAdmin = await checkAdminByEmail(sessionData.session.user.email);
+            if (isAdmin) {
+              console.log('Admin role verified by email lookup');
+            }
           }
         }
       } catch (error) {

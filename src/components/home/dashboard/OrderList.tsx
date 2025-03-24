@@ -67,6 +67,17 @@ export const OrderList: React.FC<OrderListProps> = ({
     setShowOrderDetails(true);
   };
 
+  // Status badge color map
+  const statusColors = {
+    paid: 'bg-yellow-100 text-yellow-800',
+    processing: 'bg-blue-100 text-blue-800',
+    processed: 'bg-indigo-100 text-indigo-800',
+    shipping: 'bg-purple-100 text-purple-800',
+    delivering: 'bg-teal-100 text-teal-800',
+    delivered: 'bg-green-100 text-green-800',
+    cancelled: 'bg-red-100 text-red-800'
+  };
+
   return (
     <div className={`bg-white shadow overflow-hidden sm:rounded-lg ${className}`}>
       <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
@@ -137,13 +148,8 @@ export const OrderList: React.FC<OrderListProps> = ({
                     ${order.total ? order.total.toFixed(2) : '0.00'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      order.status === 'paid' 
-                        ? 'bg-green-100 text-green-800' 
-                        : order.status === 'processing'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                      ${statusColors[order.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
                       {order.status ? order.status.charAt(0).toUpperCase() + order.status.slice(1) : 'Unknown'}
                     </span>
                   </td>
@@ -194,13 +200,8 @@ export const OrderList: React.FC<OrderListProps> = ({
                 <div>
                   <h4 className="text-sm font-medium text-gray-500">Status</h4>
                   <p className="mt-1 text-sm text-gray-900">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      activeOrder.status === 'paid' 
-                        ? 'bg-green-100 text-green-800' 
-                        : activeOrder.status === 'processing'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                      ${statusColors[activeOrder.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
                       {activeOrder.status ? activeOrder.status.charAt(0).toUpperCase() + activeOrder.status.slice(1) : 'Unknown'}
                     </span>
                   </p>

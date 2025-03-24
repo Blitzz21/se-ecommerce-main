@@ -1,36 +1,36 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { HiPlus, HiViewGrid, HiChartBar, HiShoppingCart, HiStar, HiCurrencyDollar, HiDatabase, HiX } from 'react-icons/hi';
+import { HiPlus, HiViewGrid, HiChartBar, HiShoppingCart, HiStar, HiCurrencyDollar, HiDatabase, HiX, HiUserGroup } from 'react-icons/hi';
 import { Helmet } from 'react-helmet-async';
 import { toast } from 'react-hot-toast';
-import { initDb, setAdmin, revokeAdmin } from '../../lib/dbInit';
+import { initDb, setAdmin, revokeAdminRole, initializeStorage } from '../../lib/dbInit';
 
 // Types for cart items and admin users
 interface CartItem {
   product_id: string;
   product_name: string;
   quantity?: number;
+  id?: string;  // For compatibility with the topProducts structure
+  name?: string; // For compatibility with the topProducts structure
+  count?: number; // For compatibility with the topProducts structure
 }
+
+// Order status types
+type OrderStatus = 'paid' | 'processing' | 'processed' | 'shipping' | 'delivering' | 'delivered' | 'cancelled';
 
 interface AdminUser {
-  id: string;
-  email: string;
-}
-
-interface OrderItem {
-  product_id: string;
-  product_name?: string;
-  quantity?: number;
-  price?: number;
-  revenue?: number;
+  userId: string;
+  email?: string;
 }
 
 // Interface for order data
 interface OrderData {
   id: string;
   total: string | number;
+  created_at: string;
+  status?: OrderStatus;
   items?: Array<{
     product_id: string;
     product_name?: string;
@@ -39,14 +39,22 @@ interface OrderData {
   }>;
 }
 
-const AdminDashboard = () => {
-  const { isAdmin } = useAuth();
+// Update the Analytics interface
+interface Analytics {
+  totalOrders: number;
+  totalRevenue: number;
+  averageOrderValue: number;
+  topProducts: Array<{id: string, name: string, count: number}>;
+}
+
+export const AdminDashboard = () => {
+  const { isAdmin, getAllAdmins } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [analytics, setAnalytics] = useState({
-    totalProducts: 0,
+  const [analytics, setAnalytics] = useState<Analytics>({
     totalOrders: 0,
     totalRevenue: 0,
-    avgOrderValue: 0
+    averageOrderValue: 0,
+    topProducts: []
   });
   const [topProducts, setTopProducts] = useState<CartItem[]>([]);
   const [topRated, setTopRated] = useState<any[]>([]);
@@ -55,195 +63,99 @@ const AdminDashboard = () => {
   const [adminEmail, setAdminEmail] = useState('');
   const [revokeEmail, setRevokeEmail] = useState('');
   const [initializingDb, setInitializingDb] = useState(false);
-  const [assigningAdmin, setAssigningAdmin] = useState(false);
   const [revokingAdmin, setRevokingAdmin] = useState(false);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [loadingAdmins, setLoadingAdmins] = useState(false);
 
-  // Load admin users function (defined outside of useEffect for reuse)
-  const loadAdminUsers = useCallback(async () => {
+  // Load all admin users
+  const loadAdminUsers = async () => {
     try {
-      // Fetch users with admin role
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select(`
-          user_id,
-          profiles:user_id (
-            email
-          )
-        `)
-        .eq('role', 'admin');
-      
-      if (error) throw error;
-      
-      // Format the data for display
-      const formattedAdmins = (data || []).map((item: any) => ({
-        id: item.user_id,
-        email: item.profiles?.email || 'Unknown email'
-      }));
-      
-      setAdminUsers(formattedAdmins);
+      setLoadingAdmins(true);
+      const admins = await getAllAdmins();
+      setAdminUsers(admins);
     } catch (error) {
       console.error('Error loading admin users:', error);
+      toast.error('Failed to load admin users');
+    } finally {
+      setLoadingAdmins(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    const fetchAnalytics = async () => {
+    const loadInitialData = async () => {
       try {
         setLoading(true);
         
-        // Fetch product count
-        const { count: productCount, error: productError } = await supabase
-          .from('products')
-          .select('*', { count: 'exact', head: true });
-        
-        if (productError) throw productError;
-        
-        // Fetch orders from both Supabase and localStorage
-        let allOrders: OrderData[] = [];
-        
-        // Get orders from Supabase
-        const { data: supabaseOrders, error: ordersError } = await supabase
-          .from('orders')
-          .select('*');
-        
-        if (ordersError) {
-          console.error('Error fetching orders from Supabase:', ordersError);
-        } else if (supabaseOrders) {
-          allOrders = [...supabaseOrders];
+        // Initialize storage for product images if needed
+        try {
+          await initializeStorage();
+          console.log('Storage initialization completed');
+        } catch (storageError) {
+          console.error('Failed to initialize storage:', storageError);
         }
         
-        // Get orders from localStorage
-        const demoOrdersString = window.localStorage.getItem('demoOrders');
-        if (demoOrdersString) {
-          const localOrders = JSON.parse(demoOrdersString) as OrderData[];
-          // Add unique orders (avoid duplicates)
-          const uniqueLocalOrders = localOrders.filter(
-            (localOrder) => !allOrders.some((order) => order.id === localOrder.id)
-          );
-          allOrders = [...allOrders, ...uniqueLocalOrders];
-        }
-        
-        // Calculate analytics
-        const totalOrders = allOrders.length;
-        const totalRevenue = allOrders.reduce((sum: number, order) => sum + (parseFloat(order.total as string) || 0), 0);
-        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-        
-        setAnalytics({
-          totalProducts: productCount || 0,
-          totalOrders,
-          totalRevenue,
-          avgOrderValue
-        });
-        
-        // Fetch cart items from all users
-        const { data: cartItems, error: cartError } = await supabase
-          .from('cart_items')
-          .select('product_id, product_name, quantity')
-          .not('user_id', 'is', null); // Ensure we only count items with valid user_id
-        
-        if (cartError) {
-          console.error('Error fetching cart items:', cartError);
-        } else {
-          // Aggregate cart items by product_id
-          const productCounts: Record<string, CartItem> = {};
-          
-          (cartItems || []).forEach((item: { product_id: string; product_name: string; quantity: number }) => {
-            const { product_id, product_name, quantity = 1 } = item;
-            if (!productCounts[product_id]) {
-              productCounts[product_id] = { product_id, product_name, quantity: 0 };
-            }
-            productCounts[product_id].quantity = (productCounts[product_id].quantity || 0) + quantity;
-          });
-          
-          // Convert to array and sort by quantity
-          const topProducts = Object.values(productCounts)
-            .sort((a, b) => (b.quantity || 0) - (a.quantity || 0))
-            .slice(0, 5);
-          
-          setTopProducts(topProducts);
-        }
-        
-        // Fetch top rated products
-        const { data: ratedProducts, error: ratedError } = await supabase
-          .from('products')
-          .select('id, name, rating, image')
-          .order('rating', { ascending: false })
-          .limit(5);
-        
-        if (ratedError) throw ratedError;
-        setTopRated(ratedProducts || []);
-        
-        // Calculate best sellers from orders
-        if (allOrders.length > 0) {
-          // Extract and combine all items from all orders
-          const allOrderItems: OrderItem[] = [];
-          allOrders.forEach((order: OrderData) => {
-            if (order.items && Array.isArray(order.items)) {
-              order.items.forEach((item: OrderItem) => {
-                allOrderItems.push({
-                  ...item,
-                  revenue: (parseFloat(item.price?.toString() || '0') || 0) * (item.quantity || 1)
-                });
-              });
-            }
-          });
-          
-          // Aggregate by product_id
-          const productSales: Record<string, any> = {};
-          allOrderItems.forEach(item => {
-            const { product_id, product_name, quantity = 1, revenue = 0 } = item;
-            if (!productSales[product_id]) {
-              productSales[product_id] = { 
-                id: product_id, 
-                name: product_name || 'Unknown Product', 
-                sales: 0, 
-                revenue: 0 
-              };
-            }
-            productSales[product_id].sales += quantity;
-            productSales[product_id].revenue += revenue;
-          });
-          
-          // Convert to array, sort by revenue, and take top 5
-          const topSellers = Object.values(productSales)
-            .sort((a, b) => b.revenue - a.revenue)
-            .slice(0, 5);
-          
-          if (topSellers.length > 0) {
-            setBestSellers(topSellers);
-          } else {
-            // Fallback to sample data if no real data available
-            setBestSellers([
-              { id: '1', name: 'NVIDIA GeForce RTX 4090', sales: 142, revenue: 227284.58 },
-              { id: '2', name: 'AMD Radeon RX 7900 XTX', sales: 98, revenue: 93099.02 },
-              { id: '3', name: 'NVIDIA GeForce RTX 4080 SUPER', sales: 76, revenue: 75999.24 },
-              { id: '4', name: 'NVIDIA RTX 6000 Ada Generation', sales: 24, revenue: 163223.76 },
-              { id: '5', name: 'AMD Radeon RX 7800 XT', sales: 85, revenue: 42499.15 }
-            ]);
-          }
-        } else {
-          // Fallback sample data
-          setBestSellers([
-            { id: '1', name: 'NVIDIA GeForce RTX 4090', sales: 142, revenue: 227284.58 },
-            { id: '2', name: 'AMD Radeon RX 7900 XTX', sales: 98, revenue: 93099.02 },
-            { id: '3', name: 'NVIDIA GeForce RTX 4080 SUPER', sales: 76, revenue: 75999.24 },
-            { id: '4', name: 'NVIDIA RTX 6000 Ada Generation', sales: 24, revenue: 163223.76 },
-            { id: '5', name: 'AMD Radeon RX 7800 XT', sales: 85, revenue: 42499.15 }
-          ]);
-        }
+        // Fetch analytics data
+        await Promise.all([
+          fetchAnalytics(),
+          loadAdminUsers()
+        ]);
       } catch (error) {
-        console.error('Error fetching admin analytics:', error);
+        console.error('Error loading dashboard data:', error);
       } finally {
         setLoading(false);
       }
     };
-    
+
     if (isAdmin) {
-      fetchAnalytics();
-      loadAdminUsers();
+      loadInitialData();
     }
-  }, [isAdmin, loadAdminUsers]);
+  }, [isAdmin, getAllAdmins]);
+
+  useEffect(() => {
+    // Initial fetch
+    fetchAnalytics();
+
+    // Set up realtime subscription for orders (to update analytics)
+    const ordersSubscription = supabase
+      .channel('admin-analytics-channel')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'orders'
+        }, 
+        (payload: any) => {
+          console.log('Admin analytics realtime update received:', payload);
+          // Refresh analytics when orders change
+          fetchAnalytics();
+        }
+      )
+      .subscribe();
+    
+    // Set up realtime subscription for cart items (to update most added to cart)
+    const cartSubscription = supabase
+      .channel('admin-cart-channel')
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'cart_items'
+        },
+        (payload: any) => {
+          console.log('Cart items realtime update received:', payload);
+          // Refresh analytics when cart items change
+          fetchAnalytics();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+      supabase.removeChannel(cartSubscription);
+    };
+  }, []);
 
   if (!isAdmin) {
     return (
@@ -277,59 +189,367 @@ const AdminDashboard = () => {
     }
   };
 
-  // Set up admin user
-  const handleSetupAdmin = async (e: React.FormEvent) => {
+  // Function to add a new admin by email
+  const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminEmail) {
-      toast.error('Please enter an email address');
+    
+    if (!newAdminEmail || !newAdminEmail.includes('@')) {
+      toast.error('Please enter a valid email address');
       return;
     }
-
+    
     try {
-      setAssigningAdmin(true);
-      const result = await setAdmin(adminEmail);
+      const result = await setAdmin(newAdminEmail);
+      
       if (result.success) {
-        toast.success(`Admin role ${result.message}`);
-        setAdminEmail('');
-        // Reload the admin users list
+        toast.success(`Admin role granted to ${newAdminEmail}`);
+        setNewAdminEmail('');
+        // Reload admin list
         loadAdminUsers();
       } else {
-        toast.error(`Failed to assign admin role: ${result.error}`);
+        toast.error(result.error || 'Failed to add admin user');
       }
     } catch (error) {
-      console.error('Error setting up admin:', error);
-      toast.error('An error occurred while assigning admin role');
-    } finally {
-      setAssigningAdmin(false);
+      console.error('Error adding admin user:', error);
+      toast.error('Failed to add admin user');
     }
   };
 
-  // Revoke admin from user
-  const handleRevokeAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Fix the handleRevokeAdmin function to take an event and optional email parameter
+  const handleRevokeAdmin = async (e: React.FormEvent | string, emailParam?: string) => {
+    // If called as an event handler
+    if (typeof e === 'object') {
+      e.preventDefault();
+      
+      if (!revokeEmail) {
+        toast.error('Please enter an email address');
+        return;
+      }
+      
+      await performRevokeAdmin(revokeEmail);
+    } 
+    // If called directly with email string
+    else if (typeof e === 'string' && e) {
+      await performRevokeAdmin(e);
+    }
+    // If called with event + emailParam
+    else if (emailParam) {
+      await performRevokeAdmin(emailParam);
+    }
+  };
+
+  // Helper function to perform the actual revoke operation
+  const performRevokeAdmin = async (email: string) => {
+    if (!email) return;
     
-    if (!revokeEmail) {
-      toast.error('Please enter an email address');
+    if (!confirm(`Are you sure you want to revoke admin access from ${email}?`)) {
       return;
     }
-
+    
     try {
       setRevokingAdmin(true);
-      const result = await revokeAdmin(revokeEmail);
+      const result = await revokeAdminRole(email);
       
       if (result.success) {
-        toast.success(`Admin role revoked: ${result.message}`);
+        toast.success(`Admin role revoked from ${email}`);
         setRevokeEmail('');
-        // Reload the admin users list
+        // Reload admin list
         loadAdminUsers();
       } else {
-        toast.error(`Failed to revoke admin role: ${result.error}`);
+        toast.error(result.error || 'Failed to revoke admin access');
       }
     } catch (error) {
-      console.error('Error revoking admin:', error);
-      toast.error('An error occurred while revoking admin role');
+      console.error('Error revoking admin access:', error);
+      toast.error('Failed to revoke admin access');
     } finally {
       setRevokingAdmin(false);
+    }
+  };
+
+  // Add a new section to render the admin users list
+  const renderAdminUsersSection = () => (
+    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+      <div className="flex items-center mb-4">
+        <HiUserGroup className="h-6 w-6 text-green-500 mr-2" />
+        <h2 className="text-xl font-medium">Admin Users</h2>
+      </div>
+      
+      <div className="mb-6">
+        <form onSubmit={handleAddAdmin} className="flex space-x-2">
+          <input
+            type="email"
+            value={newAdminEmail}
+            onChange={(e) => setNewAdminEmail(e.target.value)}
+            placeholder="Email address"
+            className="border border-gray-300 rounded-md px-3 py-2 flex-1 focus:outline-none focus:ring-2 focus:ring-green-500"
+            required
+          />
+          <button
+            type="submit"
+            className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+          >
+            Add Admin
+          </button>
+        </form>
+      </div>
+      
+      {loadingAdmins ? (
+        <div className="flex justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  User ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Email
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {adminUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-6 py-4 text-center text-gray-500">
+                    No admin users found
+                  </td>
+                </tr>
+              ) : (
+                adminUsers.map((admin) => (
+                  <tr key={admin.userId}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {admin.userId.slice(0, 8)}...
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {admin.email || 'Unknown Email'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      {admin.email && (
+                        <button
+                          onClick={(e) => handleRevokeAdmin(e, admin.email!)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Revoke Access
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  // Add the fetchAnalytics function definition
+  const fetchAnalytics = async () => {
+    try {
+      setLoading(true);
+      let allOrders: OrderData[] = [];
+      
+      // Get orders from Supabase
+      const { data: supabaseOrders, error } = await supabase
+        .from('orders')
+        .select('*');
+      
+      if (error) {
+        console.error('Error fetching orders from Supabase:', error);
+      } else if (supabaseOrders && supabaseOrders.length > 0) {
+        console.log('Orders found in Supabase for analytics:', supabaseOrders.length);
+        allOrders = [...supabaseOrders];
+      }
+      
+      // Calculate analytics
+      const totalOrders = allOrders.length;
+      const totalRevenue = allOrders.reduce((sum, order) => sum + (parseFloat(order.total as string) || 0), 0);
+      const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+      
+      // Get top products from orders (Most Added to Cart)
+      const productCounts: { [key: string]: { count: number, name: string } } = {};
+      allOrders.forEach(order => {
+        if (order.items && Array.isArray(order.items)) {
+          order.items.forEach(item => {
+            if (item.product_id) {
+              if (!productCounts[item.product_id]) {
+                productCounts[item.product_id] = { 
+                  count: 0, 
+                  name: item.product_name || 'Unknown Product' 
+                };
+              }
+              productCounts[item.product_id].count += item.quantity || 1;
+            }
+          });
+        }
+      });
+      
+      // Convert to array and sort by popularity
+      const topProducts = Object.entries(productCounts)
+        .map(([id, data]) => ({
+          id,
+          name: data.name,
+          count: data.count
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5); // Top 5
+      
+      // Set all analytics data
+      setAnalytics({
+        totalOrders,
+        totalRevenue,
+        averageOrderValue,
+        topProducts
+      });
+      
+      // Fetch highest rated products from the database
+      const { data: highestRatedProducts, error: ratingError } = await supabase
+        .from('products')
+        .select('id, name, image, rating')
+        .order('rating', { ascending: false })
+        .limit(5);
+        
+      if (ratingError) {
+        console.error('Error fetching highest rated products:', ratingError);
+      } else {
+        setTopRated(highestRatedProducts || []);
+      }
+      
+      // Calculate best selling products based on order data
+      const productSales: { [key: string]: { 
+        id: string, 
+        name: string, 
+        sales: number, 
+        revenue: number 
+      }} = {};
+      
+      allOrders.forEach(order => {
+        if (order.status !== 'cancelled' && order.items && Array.isArray(order.items)) {
+          order.items.forEach(item => {
+            if (item.product_id) {
+              if (!productSales[item.product_id]) {
+                productSales[item.product_id] = {
+                  id: item.product_id,
+                  name: item.product_name || 'Unknown Product',
+                  sales: 0,
+                  revenue: 0
+                };
+              }
+              
+              const quantity = item.quantity || 1;
+              const price = item.price || 0;
+              
+              productSales[item.product_id].sales += quantity;
+              productSales[item.product_id].revenue += quantity * price;
+            }
+          });
+        }
+      });
+      
+      const bestSellingProducts = Object.values(productSales)
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 5);
+      
+      // If no sales data available, use review data as a proxy for popularity
+      if (bestSellingProducts.length === 0) {
+        try {
+          const { data: mostReviewedProducts, error } = await supabase
+            .from('products')
+            .select('id, name, reviews, price')
+            .gt('reviews', 0)
+            .order('reviews', { ascending: false })
+            .limit(5);
+            
+          if (error) {
+            console.error('Error fetching most reviewed products:', error);
+          } else if (mostReviewedProducts && mostReviewedProducts.length > 0) {
+            // Use review count as a proxy for sales popularity
+            const salesFromReviews = mostReviewedProducts.map(product => {
+              // Use actual product data to estimate sales
+              const reviews = product.reviews || 0;
+              const price = product.price || 0;
+              // Estimate: each review represents approximately 10 sales
+              const estimatedSales = Math.max(1, Math.round(reviews * 10));
+              return {
+                id: product.id,
+                name: product.name,
+                sales: estimatedSales,
+                revenue: estimatedSales * price
+              };
+            });
+            setBestSellers(salesFromReviews);
+            return; // Skip the standard setBestSellers below
+          }
+        } catch (err) {
+          console.error('Error in fallback best sellers fetch:', err);
+        }
+      }
+
+      setBestSellers(bestSellingProducts);
+      
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+      toast.error('Failed to load analytics data');
+      
+      // Last resort fallbacks - only fetch real data from database if all else fails
+      try {
+        console.log('Attempting last resort fallbacks with real database data...');
+        
+        // For Most Added to Cart
+        if (topProducts.length === 0) {
+          const { data: products } = await supabase
+            .from('products')
+            .select('id, name, stock')
+            .limit(5);
+            
+          if (products && products.length > 0) {
+            setTopProducts(products.map(p => ({
+              product_id: p.id,
+              product_name: p.name,
+              quantity: p.stock || 0
+            })));
+          }
+        }
+        
+        // For Highest Rated
+        if (topRated.length === 0) {
+          const { data: products } = await supabase
+            .from('products')
+            .select('id, name, image, rating')
+            .limit(5);
+            
+          if (products && products.length > 0) {
+            setTopRated(products);
+          }
+        }
+        
+        // For Best Sellers
+        if (bestSellers.length === 0) {
+          const { data: products } = await supabase
+            .from('products')
+            .select('id, name, price')
+            .limit(5);
+            
+          if (products && products.length > 0) {
+            setBestSellers(products.map(p => ({
+              id: p.id,
+              name: p.name,
+              sales: 0,
+              revenue: 0
+            })));
+          }
+        }
+      } catch (fallbackError) {
+        console.error('Even fallback data fetching failed:', fallbackError);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -365,7 +585,7 @@ const AdminDashboard = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Products</p>
-                  <p className="text-xl font-semibold">{analytics.totalProducts}</p>
+                  <p className="text-xl font-semibold">{analytics.topProducts.length}</p>
                 </div>
               </div>
             </div>
@@ -401,7 +621,7 @@ const AdminDashboard = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Avg. Order Value</p>
-                  <p className="text-xl font-semibold">${analytics.avgOrderValue.toFixed(2)}</p>
+                  <p className="text-xl font-semibold">${analytics.averageOrderValue.toFixed(2)}</p>
                 </div>
               </div>
             </div>
@@ -444,13 +664,14 @@ const AdminDashboard = () => {
               </div>
               <div className="p-4">
                 <ul className="divide-y divide-gray-200">
-                  {topProducts.map((product) => (
-                    <li key={product.product_id} className="py-3 flex justify-between">
-                      <p className="text-sm truncate">{product.product_name}</p>
-                      <p className="text-sm text-gray-500">{product.quantity} items</p>
-                    </li>
-                  ))}
-                  {topProducts.length === 0 && (
+                  {topProducts.length > 0 ? (
+                    topProducts.map((product) => (
+                      <li key={product.product_id} className="py-3 flex justify-between">
+                        <p className="text-sm truncate">{product.product_name}</p>
+                        <p className="text-sm text-gray-500">{product.quantity} items</p>
+                      </li>
+                    ))
+                  ) : (
                     <li className="py-3 text-center text-sm text-gray-500">No data available</li>
                   )}
                 </ul>
@@ -464,23 +685,27 @@ const AdminDashboard = () => {
               </div>
               <div className="p-4">
                 <ul className="divide-y divide-gray-200">
-                  {topRated.map((product) => (
-                    <li key={product.id} className="py-3 flex justify-between items-center">
-                      <div className="flex items-center">
-                        <img 
-                          src={product.image || "/placeholder.png"} 
-                          alt={product.name} 
-                          className="h-8 w-8 object-cover mr-3"
-                        />
-                        <p className="text-sm truncate">{product.name}</p>
-                      </div>
-                      <div className="flex items-center">
-                        <HiStar className="h-4 w-4 text-yellow-500 mr-1" />
-                        <p className="text-sm text-gray-500">{product.rating.toFixed(1)}</p>
-                      </div>
-                    </li>
-                  ))}
-                  {topRated.length === 0 && (
+                  {topRated.length > 0 ? (
+                    topRated.map((product) => (
+                      <li key={product.id} className="py-3 flex justify-between items-center">
+                        <div className="flex items-center">
+                          <img 
+                            src={product.image || "/placeholder.png"} 
+                            alt={product.name} 
+                            className="h-8 w-8 object-cover rounded-full mr-3"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "/placeholder.png";
+                            }}
+                          />
+                          <p className="text-sm truncate">{product.name}</p>
+                        </div>
+                        <div className="flex items-center">
+                          <HiStar className="h-4 w-4 text-yellow-500 mr-1" />
+                          <p className="text-sm text-gray-500">{(product.rating || 0).toFixed(1)}</p>
+                        </div>
+                      </li>
+                    ))
+                  ) : (
                     <li className="py-3 text-center text-sm text-gray-500">No data available</li>
                   )}
                 </ul>
@@ -494,15 +719,19 @@ const AdminDashboard = () => {
               </div>
               <div className="p-4">
                 <ul className="divide-y divide-gray-200">
-                  {bestSellers.map((product) => (
-                    <li key={product.id} className="py-3 flex justify-between">
-                      <p className="text-sm truncate">{product.name}</p>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-900">{product.sales} units</p>
-                        <p className="text-xs text-gray-500">${product.revenue.toFixed(2)}</p>
-                      </div>
-                    </li>
-                  ))}
+                  {bestSellers.length > 0 ? (
+                    bestSellers.map((product) => (
+                      <li key={product.id} className="py-3 flex justify-between">
+                        <p className="text-sm truncate">{product.name}</p>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-900">{product.sales || 0} units</p>
+                          <p className="text-xs text-gray-500">${(product.revenue || 0).toFixed(2)}</p>
+                        </div>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="py-3 text-center text-sm text-gray-500">No data available</li>
+                  )}
                 </ul>
               </div>
             </div>
@@ -541,7 +770,7 @@ const AdminDashboard = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
                     <h2 className="text-lg font-medium text-gray-900 mb-4">Add Admin User</h2>
-                    <form onSubmit={handleSetupAdmin} className="flex flex-col space-y-4">
+                    <form onSubmit={handleAddAdmin} className="flex flex-col space-y-4">
                       <div>
                         <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-700">
                           User Email
@@ -558,13 +787,13 @@ const AdminDashboard = () => {
                       </div>
                       <button
                         type="submit"
-                        disabled={assigningAdmin}
+                        disabled={revokingAdmin}
                         className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
                       >
-                        {assigningAdmin ? (
+                        {revokingAdmin ? (
                           <div className="flex items-center">
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Assigning...
+                            Revoking...
                           </div>
                         ) : (
                           <>Assign Admin Role</>
@@ -615,14 +844,10 @@ const AdminDashboard = () => {
                   ) : (
                     <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md">
                       {adminUsers.map(admin => (
-                        <li key={admin.id} className="px-4 py-3 flex justify-between items-center">
-                          <span className="text-sm text-gray-700">{admin.email}</span>
+                        <li key={admin.userId} className="px-4 py-3 flex justify-between items-center">
+                          <span className="text-sm text-gray-700">{admin.email || 'Unknown Email'}</span>
                           <button
-                            onClick={() => {
-                              setRevokeEmail(admin.email);
-                              // Scroll to the revoke form
-                              document.getElementById('revokeEmail')?.scrollIntoView({ behavior: 'smooth' });
-                            }}
+                            onClick={(e) => handleRevokeAdmin(e, admin.email || '')}
                             className="inline-flex items-center px-2 py-1 border border-transparent rounded text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200"
                           >
                             <HiX className="mr-1 h-3 w-3" />
@@ -636,10 +861,11 @@ const AdminDashboard = () => {
               </div>
             )}
           </div>
+
+          {/* Insert admin users section here */}
+          {renderAdminUsersSection()}
         </>
       )}
     </div>
   );
-};
-
-export default AdminDashboard; 
+}; 

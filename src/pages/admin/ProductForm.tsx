@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { Helmet } from 'react-helmet-async';
 import { HiArrowLeft, HiSave, HiTrash, HiUpload } from 'react-icons/hi';
 import { Product } from '../../data/products';
+import { initializeStorage } from '../../lib/dbInit';
 
 const categories = ['Gaming', 'Workstation', 'Mining', 'AI'];
 const badges = ['NEW', 'SALE', 'LIMITED', 'BEST SELLER'];
@@ -149,11 +150,46 @@ const ProductForm = () => {
       const fileExt = imageFile.name.split('.').pop();
       const filePath = `products/${productId}.${fileExt}`;
       
+      // Try to upload the image
       const { error: uploadError } = await supabase.storage
         .from('product-images')
         .upload(filePath, imageFile, { upsert: true });
       
-      if (uploadError) throw uploadError;
+      // If bucket doesn't exist, create it and try again
+      if (uploadError && 
+          (uploadError.message.includes('Bucket not found') || 
+           uploadError.message.includes('404'))) {
+        
+        console.log('Bucket not found, trying to create it...');
+        
+        // Show an alert with instructions for creating the bucket
+        toast.error(
+          'Storage bucket "product-images" not found. Please create it in the Supabase dashboard: Storage → New Bucket → Name: "product-images" → Enable public access: true', 
+          { duration: 10000 }
+        );
+        
+        // Try to create the bucket anyway, might work if permissions are set correctly
+        const initResult = await initializeStorage();
+        
+        if (initResult.success) {
+          // Try upload again after creating the bucket
+          const { error: retryError } = await supabase.storage
+            .from('product-images')
+            .upload(filePath, imageFile, { upsert: true });
+          
+          if (retryError) {
+            console.error('Error uploading image after bucket creation:', retryError);
+            toast.error('Failed to upload product image');
+            return null;
+          }
+        } else {
+          console.error('Failed to create storage bucket:', initResult.error);
+          toast.error('Failed to create storage for images', { duration: 5000 });
+          return null;
+        }
+      } else if (uploadError) {
+        throw uploadError;
+      }
       
       // Get the public URL for the uploaded image
       const { data } = supabase.storage
@@ -163,17 +199,16 @@ const ProductForm = () => {
       return data.publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast.error('Failed to upload product image');
+      toast.error('Failed to upload product image. Please try again.');
       return null;
     }
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setSubmitting(true);
+
     try {
-      setSubmitting(true);
-      
       // Validate required fields
       if (!product.name || !product.brand || !product.price) {
         toast.error('Please fill in all required fields');
@@ -241,23 +276,34 @@ const ProductForm = () => {
       
       // Upload image if one was selected
       if (imageFile) {
-        const imageUrl = await uploadImage(savedProductId);
-        
-        if (imageUrl) {
-          // Update the product with the image URL
-          await supabase
-            .from('products')
-            .update({ image: imageUrl })
-            .eq('id', savedProductId);
+        try {
+          const imageUrl = await uploadImage(savedProductId);
+          
+          if (imageUrl) {
+            // Update the product with the image URL
+            await supabase
+              .from('products')
+              .update({ image: imageUrl })
+              .eq('id', savedProductId);
+          } else {
+            // Image upload failed but product was saved
+            toast.error(
+              'Product saved without image. To add an image later, please create a "product-images" bucket in your Supabase dashboard.',
+              { duration: 8000 }
+            );
+          }
+        } catch (imageError) {
+          console.error('Error handling product image:', imageError);
+          toast.error('Product saved without image due to an error during upload.', { duration: 5000 });
         }
       }
       
       toast.success(`Product ${isEditMode ? 'updated' : 'created'} successfully`);
       navigate('/admin/products');
       
-    } catch (error) {
-      console.error('Error saving product:', error);
-      toast.error(`Failed to ${isEditMode ? 'update' : 'create'} product`);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      toast.error(errorMessage);
     } finally {
       setSubmitting(false);
     }

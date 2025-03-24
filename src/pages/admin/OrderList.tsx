@@ -5,36 +5,46 @@ import { Helmet } from 'react-helmet-async';
 import { HiSearch, HiRefresh, HiOutlineChevronLeft, HiOutlineChevronRight, HiEye } from 'react-icons/hi';
 
 // Order status types
-type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+type OrderStatus = 'paid' | 'processing' | 'processed' | 'shipping' | 'delivering' | 'delivered' | 'cancelled';
 
-// Order interface
+// Order interface updated to match database structure
 interface Order {
   id: string;
   user_id: string;
   created_at: string;
+  updated_at?: string;
   status: OrderStatus;
   total: number;
-  shipping_address: {
-    name: string;
-    address: string;
-    city: string;
-    state: string;
-    postal_code: string;
-    country: string;
-  };
-  payment_method: string;
-  items: {
-    id: string;
+  items: Array<{
     product_id: string;
+    product_name: string;
     quantity: number;
     price: number;
-    product_name: string;
-  }[];
+  }>;
+  shipping_address?: {
+    line1?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    country?: string;
+  };
+  billing_address?: {
+    line1?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    country?: string;
+  };
+  customer_name?: string;
+  customer_email?: string;
+  payment_id?: string;
+  payment_method?: string;
+  // Frontend-only properties for display
   email?: string;
   user_name?: string;
 }
 
-const OrderList = () => {
+export const OrderList = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,112 +53,88 @@ const OrderList = () => {
   const [totalOrders, setTotalOrders] = useState(0);
   const ordersPerPage = 10;
 
+
+  // Add this state at the top of the component
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
   // Fetch orders with pagination
   const fetchOrders = async (page = 1, search = '', status: OrderStatus | 'all' = 'all') => {
     try {
       setLoading(true);
       
-      // Initialize an array to store all orders
-      let allOrders: Order[] = [];
-      let count = 0;
+      console.log('Fetching orders with params:', { page, search, status });
       
-      // Try to fetch from Supabase first
+      // Get total count first with a simpler query
+      const countQuery = supabase
+        .from('orders')
+        .select('id', { count: 'exact' });
+        
+      // Add status filter if needed
+      if (status !== 'all') {
+        countQuery.eq('status', status);
+      }
+      
+      // Add search filter if needed
+      if (search) {
+        countQuery.or(`id.ilike.%${search}%,customer_email.ilike.%${search}%`);
+      }
+      
+      const { count: totalCount, error: countError } = await countQuery;
+      
+      if (countError) {
+        console.error('Error fetching order count:', countError);
+      } else {
+        console.log('Total orders count:', totalCount);
+        setTotalOrders(totalCount || 0);
+      }
+      
+      // Now fetch the actual orders
       let query = supabase
         .from('orders')
-        .select(`
-          *,
-          profiles:user_id (
-            email, 
-            first_name, 
-            last_name
-          )
-        `, { count: 'exact' });
+        .select('*');
       
-      // Add status filter if not 'all'
+      // Add status filter if needed
       if (status !== 'all') {
         query = query.eq('status', status);
       }
       
-      // Add search if provided - search in order ID or user email
+      // Add search if provided
       if (search) {
-        query = query.or(`id.ilike.%${search}%,profiles.email.ilike.%${search}%`);
+        query = query.or(`id.ilike.%${search}%,customer_email.ilike.%${search}%`);
       }
+      
+      // Add pagination
+      const from = (page - 1) * ordersPerPage;
+      query = query
+        .order('created_at', { ascending: false })
+        .range(from, from + ordersPerPage - 1);
       
       // Execute the query
-      const { data: supabaseOrders, error, count: supabaseCount } = await query
-        .order('created_at', { ascending: false });
+      const { data: orderData, error: ordersError } = await query;
       
-      if (error) {
-        console.error('Error fetching orders from Supabase:', error);
-      } else if (supabaseOrders && supabaseOrders.length > 0) {
-        console.log('Orders found in Supabase:', supabaseOrders.length);
+      if (ordersError) {
+        console.error('Error fetching orders from Supabase:', ordersError);
+        toast.error('Failed to load orders. Please try again later.');
+        setOrders([]);
+      } else if (orderData && orderData.length > 0) {
+        console.log('Orders found in Supabase:', orderData.length);
         
-        // Format orders with user email if available
-        const formattedSupabaseOrders = supabaseOrders.map(order => {
-          const profile = order.profiles;
-          return {
-            ...order,
-            email: profile?.email || 'Unknown',
-            user_name: profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Unknown',
-            profiles: undefined
-          };
-        });
-        
-        allOrders = [...formattedSupabaseOrders];
-        count = supabaseCount || 0;
-      }
-      
-      // Also check localStorage for any orders
-      const demoOrdersString = window.localStorage.getItem('demoOrders');
-      if (demoOrdersString) {
-        let parsedDemoOrders = JSON.parse(demoOrdersString);
-        
-        // Apply status filter if needed
-        if (status !== 'all') {
-          parsedDemoOrders = parsedDemoOrders.filter((order: any) => order.status === status);
-        }
-        
-        // Apply search filter if needed
-        if (search) {
-          parsedDemoOrders = parsedDemoOrders.filter((order: any) => 
-            order.id.includes(search) || 
-            (order.customer_email && order.customer_email.includes(search))
-          );
-        }
-        
-        // Format local orders
-        const localOrders = parsedDemoOrders.map((order: any) => ({
+        // Format orders with user information
+        const formattedOrders = orderData.map(order => ({
           ...order,
           email: order.customer_email || 'Unknown',
           user_name: order.customer_name || 'Unknown'
         }));
         
-        if (localOrders.length > 0) {
-          console.log('Orders found in localStorage:', localOrders.length);
-          
-          // Check if an order with the same ID exists in allOrders
-          const uniqueLocalOrders = localOrders.filter(
-            (localOrder: any) => !allOrders.some(order => order.id === localOrder.id)
-          );
-          
-          // Merge orders
-          allOrders = [...allOrders, ...uniqueLocalOrders];
-          count += uniqueLocalOrders.length;
-        }
+        setOrders(formattedOrders);
+      } else {
+        console.log('No orders found in database');
+        setOrders([]);
       }
-      
-      // Apply pagination to the combined array
-      const from = (page - 1) * ordersPerPage;
-      const to = from + ordersPerPage;
-      const paginatedOrders = allOrders.slice(from, to);
-      
-      setOrders(paginatedOrders);
-      setTotalOrders(count);
     } catch (error) {
       console.error('Error in orders fetch process:', error);
       toast.error('Failed to load orders');
       setOrders([]);
-      setTotalOrders(0);
     } finally {
       setLoading(false);
     }
@@ -157,7 +143,102 @@ const OrderList = () => {
   // Initial load and when filters change
   useEffect(() => {
     fetchOrders(currentPage, searchTerm, statusFilter);
+
+    // Set up realtime subscription for orders
+    const ordersSubscription = supabase
+      .channel('admin-orders-channel')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'orders'
+        }, 
+        (payload) => {
+          console.log('Admin realtime update received:', payload);
+          
+          // If we're not on the first page or have filters, just refetch
+          if (currentPage !== 1 || searchTerm || statusFilter !== 'all') {
+            fetchOrders(currentPage, searchTerm, statusFilter);
+            return;
+          }
+          
+          // Handle different types of changes
+          if (payload.eventType === 'INSERT') {
+            // For insert, we need to get the user profile data as well
+            fetchOrderWithProfile(payload.new.id).then(formattedOrder => {
+              if (formattedOrder) {
+                // Add to beginning if we're on the first page and no filters
+                setOrders(prevOrders => {
+                  // Limit to ordersPerPage
+                  const updatedOrders = [formattedOrder, ...prevOrders];
+                  return updatedOrders.slice(0, ordersPerPage);
+                });
+                
+                // Update total count
+                setTotalOrders(prevCount => prevCount + 1);
+              }
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            // For updates, update the order if it's in our current view
+            setOrders(prevOrders => 
+              prevOrders.map(order => 
+                order.id === payload.new.id ? {
+                  ...order,
+                  ...payload.new,
+                } : order
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            // For deletes, remove the order if it's in our current view
+            setOrders(prevOrders => 
+              prevOrders.filter(order => order.id !== payload.old.id)
+            );
+            // Update total count
+            setTotalOrders(prevCount => Math.max(0, prevCount - 1));
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount or when filters change
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+    };
   }, [currentPage, searchTerm, statusFilter]);
+
+  // Helper function to fetch a single order with profile
+  const fetchOrderWithProfile = async (orderId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          profiles:user_id (
+            email, 
+            first_name, 
+            last_name
+          )
+        `)
+        .eq('id', orderId)
+        .single();
+        
+      if (error || !data) {
+        console.error('Error fetching order details:', error);
+        return null;
+      }
+      
+      const profile = data.profiles;
+      return {
+        ...data,
+        email: profile?.email || 'Unknown',
+        user_name: profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Unknown',
+        profiles: undefined
+      };
+    } catch (error) {
+      console.error('Error fetching order with profile:', error);
+      return null;
+    }
+  };
 
   // Handle search
   const handleSearch = (e: React.FormEvent) => {
@@ -172,35 +253,53 @@ const OrderList = () => {
     setCurrentPage(1); // Reset to first page on new filter
   };
   
+  // Get valid next statuses based on current status
+  const getValidNextStatuses = (currentStatus: OrderStatus): OrderStatus[] => {
+    switch (currentStatus) {
+      case 'paid':
+        return ['processing', 'cancelled'];
+      case 'processing':
+        return ['processed', 'cancelled'];
+      case 'processed':
+        return ['shipping', 'cancelled'];
+      case 'shipping':
+        return ['delivering', 'cancelled'];
+      case 'delivering':
+        return ['delivered', 'cancelled'];
+      case 'delivered':
+        return ['cancelled']; // Can still cancel if needed
+      case 'cancelled':
+        return ['paid']; // Allow reactivating a cancelled order
+      default:
+        return ['paid', 'processing', 'processed', 'shipping', 'delivering', 'delivered', 'cancelled'];
+    }
+  };
+
+  // Get valid statuses for dropdown including current status
+  const getStatusOptions = (currentStatus: OrderStatus): OrderStatus[] => {
+    const nextStatuses = getValidNextStatuses(currentStatus);
+    if (!nextStatuses.includes(currentStatus)) {
+      return [currentStatus, ...nextStatuses];
+    }
+    return nextStatuses;
+  };
+
   // Update order status
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     try {
-      // First try to update in Supabase
+      // Update in Supabase
       const { error } = await supabase
         .from('orders')
-        .update({ status })
+        .update({ status, updated_at: new Date().toISOString() })
         .eq('id', orderId);
       
       if (error) {
         console.error('Error updating order status in Supabase:', error);
-        
-        // If Supabase fails, try localStorage
-        const demoOrdersString = window.localStorage.getItem('demoOrders');
-        if (demoOrdersString) {
-          const demoOrders = JSON.parse(demoOrdersString);
-          const updatedDemoOrders = demoOrders.map((order: any) => 
-            order.id === orderId ? { ...order, status } : order
-          );
-          window.localStorage.setItem('demoOrders', JSON.stringify(updatedDemoOrders));
-          console.log('Order status updated in localStorage');
-        }
+        toast.error('Failed to update order status');
+        return;
       }
       
-      // Update local state
-      setOrders(orders.map(order => 
-        order.id === orderId ? { ...order, status } : order
-      ));
-      
+      // Don't update local state manually - the realtime subscription will handle this
       toast.success(`Order status updated to ${status}`);
     } catch (error) {
       console.error('Error updating order status:', error);
@@ -225,11 +324,38 @@ const OrderList = () => {
 
   // Status badge color map
   const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-800',
+    paid: 'bg-yellow-100 text-yellow-800',
     processing: 'bg-blue-100 text-blue-800',
-    shipped: 'bg-purple-100 text-purple-800',
+    processed: 'bg-indigo-100 text-indigo-800',
+    shipping: 'bg-purple-100 text-purple-800',
+    delivering: 'bg-teal-100 text-teal-800',
     delivered: 'bg-green-100 text-green-800',
     cancelled: 'bg-red-100 text-red-800'
+  };
+
+  // Add this helper function for formatting JSON
+  const formatAddress = (address: any) => {
+    if (!address) return 'No address provided';
+    
+    try {
+      // If it's a string, try to parse it
+      const addressObj = typeof address === 'string' 
+        ? JSON.parse(address) 
+        : address;
+        
+      return (
+        <div>
+          <p>{addressObj.line1 || addressObj.address || 'N/A'}</p>
+          <p>
+            {addressObj.city || 'N/A'}, {addressObj.state || 'N/A'} {addressObj.postal_code || 'N/A'}
+          </p>
+          <p>{addressObj.country || 'N/A'}</p>
+        </div>
+      );
+    } catch (e) {
+      console.error('Error parsing address:', e);
+      return 'Invalid address format';
+    }
   };
 
   return (
@@ -285,7 +411,7 @@ const OrderList = () => {
           >
             All
           </button>
-          {(['pending', 'processing', 'shipped', 'delivered', 'cancelled'] as const).map(status => (
+          {(['paid', 'processing', 'processed', 'shipping', 'delivering', 'delivered', 'cancelled'] as const).map(status => (
             <button
               key={status}
               onClick={() => handleStatusChange(status)}
@@ -310,10 +436,13 @@ const OrderList = () => {
                 Order ID
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Date
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Customer
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date
+                Email
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Total
@@ -345,17 +474,19 @@ const OrderList = () => {
               orders.map((order) => (
                 <tr key={order.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    #{order.id.substring(0, 8)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{order.user_name}</div>
-                    <div className="text-sm text-gray-500">{order.email}</div>
+                    {order.id.substring(0, 8)}...
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(order.created_at)}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.user_name || order.customer_name || 'Unknown'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.email || order.customer_email || 'Unknown'}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${order.total.toFixed(2)}
+                    ${parseFloat(order.total.toString()).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select
@@ -363,22 +494,17 @@ const OrderList = () => {
                       onChange={(e) => updateOrderStatus(order.id, e.target.value as OrderStatus)}
                       className={`px-2 py-1 rounded-md text-xs font-medium ${statusColors[order.status]}`}
                     >
-                      <option value="pending">Pending</option>
-                      <option value="processing">Processing</option>
-                      <option value="shipped">Shipped</option>
-                      <option value="delivered">Delivered</option>
-                      <option value="cancelled">Cancelled</option>
+                      {getStatusOptions(order.status).map(status => (
+                        <option key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</option>
+                      ))}
                     </select>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <button
-                      onClick={() => {
-                        // Open order details modal (future enhancement)
-                        toast.success(`Viewing details for order #${order.id.substring(0, 8)}`);
-                      }}
-                      className="text-indigo-600 hover:text-indigo-900"
+                      onClick={() => setSelectedOrder(order)}
+                      className="text-green-600 hover:text-green-900 mr-3"
                     >
-                      <HiEye className="h-5 w-5" />
+                      <HiEye className="h-5 w-5" aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -459,6 +585,171 @@ const OrderList = () => {
                   <HiOutlineChevronRight className="h-5 w-5" aria-hidden="true" />
                 </button>
               </nav>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* When no orders are found */}
+      {!loading && orders.length === 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Orders Found</h3>
+          <p className="text-gray-500 mb-4">
+            {searchTerm || statusFilter !== 'all' 
+              ? 'No orders match your current filters.' 
+              : 'There are no orders in the system yet.'}
+          </p>
+          {(searchTerm || statusFilter !== 'all') && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+                fetchOrders(1, '', 'all');
+              }}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              <HiRefresh className="-ml-1 mr-2 h-5 w-5" />
+              Clear Filters
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Order Details: #{selectedOrder.id.substring(0, 8)}
+              </h3>
+              <button 
+                onClick={() => setSelectedOrder(null)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="px-6 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500">Order Information</h4>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-sm text-gray-900">
+                      <span className="font-medium">Status:</span>{' '}
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[selectedOrder.status]}`}>
+                        {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                      </span>
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      <span className="font-medium">Order Date:</span>{' '}
+                      {formatDate(selectedOrder.created_at)}
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      <span className="font-medium">Total:</span>{' '}
+                      ${parseFloat(selectedOrder.total.toString()).toFixed(2)}
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      <span className="font-medium">Payment ID:</span>{' '}
+                      {selectedOrder.payment_id || 'N/A'}
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      <span className="font-medium">Payment Method:</span>{' '}
+                      {selectedOrder.payment_method || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500">Customer Information</h4>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-sm text-gray-900">
+                      <span className="font-medium">Name:</span>{' '}
+                      {selectedOrder.customer_name || 'N/A'}
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      <span className="font-medium">Email:</span>{' '}
+                      {selectedOrder.customer_email || 'N/A'}
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      <span className="font-medium">User ID:</span>{' '}
+                      {selectedOrder.user_id}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <h4 className="text-sm font-medium text-gray-500">Shipping Address</h4>
+                <div className="mt-2 text-sm text-gray-900">
+                  {formatAddress(selectedOrder.shipping_address)}
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <h4 className="text-sm font-medium text-gray-500">Billing Address</h4>
+                <div className="mt-2 text-sm text-gray-900">
+                  {formatAddress(selectedOrder.billing_address)}
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium text-gray-500">Order Items</h4>
+                {Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? (
+                  <table className="min-w-full divide-y divide-gray-200 mt-2">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Product
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Price
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Quantity
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Total
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {selectedOrder.items.map((item, index) => (
+                        <tr key={index}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {item.product_name || 'Unknown Product'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${parseFloat(item.price.toString()).toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {item.quantity}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${(parseFloat(item.price.toString()) * item.quantity).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="mt-2 text-sm text-gray-500">No items found for this order.</p>
+                )}
+              </div>
+              
+              <div className="mt-8 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrder(null)}
+                  className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
