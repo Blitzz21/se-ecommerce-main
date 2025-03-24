@@ -5,7 +5,7 @@ import { useCart } from '../contexts/CartContext';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/supabase';
 import { toast } from 'react-hot-toast';
-import { HiChevronLeft, HiHome, HiPlus } from 'react-icons/hi';
+import { HiChevronLeft, HiHome } from 'react-icons/hi';
 import { Helmet } from 'react-helmet-async';
 import { v4 as uuidv4 } from 'uuid';
 import { FaPaypal, FaMobile, FaCreditCard, FaMoneyBillWave } from 'react-icons/fa';
@@ -31,7 +31,7 @@ const CheckoutForm = () => {
   const [useExistingAddress, setUseExistingAddress] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string>('');
   const [addresses, setAddresses] = useState<Address[]>([]);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'card' | 'paypal' | 'gcash' | 'grabpay' | 'cashapp'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'paypal' | 'gcash' | 'grabpay' | 'cashapp'>('card');
   
   // Card payment fields
   const [cardNumber, setCardNumber] = useState('');
@@ -60,12 +60,6 @@ const CheckoutForm = () => {
     country: 'United States',
   });
   
-  const [shippingInfo, setShippingInfo] = useState({
-    name: '',
-    email: '',
-    phone: ''
-  });
-  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -84,11 +78,6 @@ const CheckoutForm = () => {
         setSelectedAddress(demoAddresses.length > 0 ? demoAddresses[0].id : '');
         
         // No default address since we have an empty array
-        setShippingInfo({
-          name: '',
-          email: user?.email || '',
-          phone: ''
-        });
       } catch (error) {
         console.error('Error loading saved addresses:', error);
       }
@@ -148,7 +137,7 @@ const CheckoutForm = () => {
     if (!user) return;
 
     // Validate form based on selected payment method
-    if (selectedPaymentMethod === 'card') {
+    if (paymentMethod === 'card') {
       if (
         !name ||
         !cardNumber ||
@@ -164,7 +153,7 @@ const CheckoutForm = () => {
         toast.error('Please fill in all required fields');
         return;
       }
-    } else if (selectedPaymentMethod === 'paypal') {
+    } else if (paymentMethod === 'paypal') {
       if (
         !paypalEmail ||
         (!useExistingAddress && (
@@ -177,7 +166,7 @@ const CheckoutForm = () => {
         toast.error('Please fill in all required fields');
         return;
       }
-    } else if (selectedPaymentMethod === 'gcash') {
+    } else if (paymentMethod === 'gcash') {
       if (
         !gcashNumber ||
         (!useExistingAddress && (
@@ -190,7 +179,7 @@ const CheckoutForm = () => {
         toast.error('Please fill in all required fields');
         return;
       }
-    } else if (selectedPaymentMethod === 'grabpay') {
+    } else if (paymentMethod === 'grabpay') {
       if (
         !grabpayNumber ||
         (!useExistingAddress && (
@@ -203,7 +192,7 @@ const CheckoutForm = () => {
         toast.error('Please fill in all required fields');
         return;
       }
-    } else if (selectedPaymentMethod === 'cashapp') {
+    } else if (paymentMethod === 'cashapp') {
       if (
         !cashappUsername ||
         (!useExistingAddress && (
@@ -245,7 +234,7 @@ const CheckoutForm = () => {
         customer_name: name,
         customer_email: user.email || '',
         payment_id: paymentId,
-        payment_method: selectedPaymentMethod,
+        payment_method: paymentMethod,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -285,23 +274,6 @@ const CheckoutForm = () => {
       toast.error('Failed to place order');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const getPaymentIcon = (type: 'card' | 'paypal' | 'gcash' | 'grabpay' | 'cashapp') => {
-    switch (type) {
-      case 'card':
-        return <FaCreditCard className="h-5 w-5" />;
-      case 'paypal':
-        return <FaPaypal className="h-5 w-5 text-[#003087]" />;
-      case 'gcash':
-        return <FaMobile className="h-5 w-5 text-[#00a1df]" />;
-      case 'grabpay':
-        return <FaMobile className="h-5 w-5 text-[#00b14f]" />;
-      case 'cashapp':
-        return <FaMoneyBillWave className="h-5 w-5 text-[#00d632]" />;
-      default:
-        return <FaCreditCard className="h-5 w-5" />;
     }
   };
 
@@ -448,71 +420,71 @@ const CheckoutForm = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 mb-6">
             <button
               type="button"
-              onClick={() => setSelectedPaymentMethod('card')}
+              onClick={() => setPaymentMethod('card')}
               className={`flex items-center justify-center py-3 px-4 border rounded-md ${
-                selectedPaymentMethod === 'card'
+                paymentMethod === 'card'
                   ? 'bg-green-100 border-green-500 text-green-800'
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <FaCreditCard className={`mr-2 h-5 w-5 ${selectedPaymentMethod === 'card' ? 'text-green-600' : 'text-gray-500'}`} />
+              <FaCreditCard className={`mr-2 h-5 w-5 ${paymentMethod === 'card' ? 'text-green-600' : 'text-gray-500'}`} />
               <span>Credit Card</span>
             </button>
             
             <button
               type="button"
-              onClick={() => setSelectedPaymentMethod('paypal')}
+              onClick={() => setPaymentMethod('paypal')}
               className={`flex items-center justify-center py-3 px-4 border rounded-md ${
-                selectedPaymentMethod === 'paypal'
+                paymentMethod === 'paypal'
                   ? 'bg-blue-100 border-blue-500 text-blue-800'
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <FaPaypal className={`mr-2 h-5 w-5 ${selectedPaymentMethod === 'paypal' ? 'text-[#003087]' : 'text-gray-500'}`} />
+              <FaPaypal className={`mr-2 h-5 w-5 ${paymentMethod === 'paypal' ? 'text-[#003087]' : 'text-gray-500'}`} />
               <span>PayPal</span>
             </button>
             
             <button
               type="button"
-              onClick={() => setSelectedPaymentMethod('gcash')}
+              onClick={() => setPaymentMethod('gcash')}
               className={`flex items-center justify-center py-3 px-4 border rounded-md ${
-                selectedPaymentMethod === 'gcash'
+                paymentMethod === 'gcash'
                   ? 'bg-blue-100 border-blue-500 text-blue-800'
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <FaMobile className={`mr-2 h-5 w-5 ${selectedPaymentMethod === 'gcash' ? 'text-[#00a1df]' : 'text-gray-500'}`} />
+              <FaMobile className={`mr-2 h-5 w-5 ${paymentMethod === 'gcash' ? 'text-[#00a1df]' : 'text-gray-500'}`} />
               <span>GCash</span>
             </button>
             
             <button
               type="button"
-              onClick={() => setSelectedPaymentMethod('grabpay')}
+              onClick={() => setPaymentMethod('grabpay')}
               className={`flex items-center justify-center py-3 px-4 border rounded-md ${
-                selectedPaymentMethod === 'grabpay'
+                paymentMethod === 'grabpay'
                   ? 'bg-green-100 border-green-500 text-green-800'
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <FaMobile className={`mr-2 h-5 w-5 ${selectedPaymentMethod === 'grabpay' ? 'text-[#00b14f]' : 'text-gray-500'}`} />
+              <FaMobile className={`mr-2 h-5 w-5 ${paymentMethod === 'grabpay' ? 'text-[#00b14f]' : 'text-gray-500'}`} />
               <span>GrabPay</span>
             </button>
             
             <button
               type="button"
-              onClick={() => setSelectedPaymentMethod('cashapp')}
+              onClick={() => setPaymentMethod('cashapp')}
               className={`flex items-center justify-center py-3 px-4 border rounded-md ${
-                selectedPaymentMethod === 'cashapp'
+                paymentMethod === 'cashapp'
                   ? 'bg-green-100 border-green-500 text-green-800'
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <FaMoneyBillWave className={`mr-2 h-5 w-5 ${selectedPaymentMethod === 'cashapp' ? 'text-[#00d632]' : 'text-gray-500'}`} />
+              <FaMoneyBillWave className={`mr-2 h-5 w-5 ${paymentMethod === 'cashapp' ? 'text-[#00d632]' : 'text-gray-500'}`} />
               <span>Cash App</span>
             </button>
           </div>
           
-          {selectedPaymentMethod === 'card' && (
+          {paymentMethod === 'card' && (
             <div className="mt-6 grid grid-cols-6 gap-6">
               <div className="col-span-6">
                 <label htmlFor="card-number" className="block text-sm font-medium text-gray-700">
@@ -561,7 +533,7 @@ const CheckoutForm = () => {
             </div>
           )}
           
-          {selectedPaymentMethod === 'paypal' && (
+          {paymentMethod === 'paypal' && (
             <div className="mt-6">
               <label htmlFor="paypal-email" className="block text-sm font-medium text-gray-700">
                 PayPal Email Address
@@ -581,7 +553,7 @@ const CheckoutForm = () => {
             </div>
           )}
           
-          {selectedPaymentMethod === 'gcash' && (
+          {paymentMethod === 'gcash' && (
             <div className="mt-6">
               <label htmlFor="gcash-number" className="block text-sm font-medium text-gray-700">
                 GCash Phone Number
@@ -601,7 +573,7 @@ const CheckoutForm = () => {
             </div>
           )}
           
-          {selectedPaymentMethod === 'grabpay' && (
+          {paymentMethod === 'grabpay' && (
             <div className="mt-6">
               <label htmlFor="grabpay-number" className="block text-sm font-medium text-gray-700">
                 GrabPay Phone Number
@@ -621,7 +593,7 @@ const CheckoutForm = () => {
             </div>
           )}
           
-          {selectedPaymentMethod === 'cashapp' && (
+          {paymentMethod === 'cashapp' && (
             <div className="mt-6">
               <label htmlFor="cashapp-username" className="block text-sm font-medium text-gray-700">
                 Cash App Username

@@ -48,7 +48,7 @@ const Orders = () => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        let finalOrders = [];
+        let finalOrders: Order[] = [];
         
         // Try to fetch from Supabase
         const { data: supabaseOrders, error } = await supabase
@@ -69,7 +69,7 @@ const Orders = () => {
         if (demoOrdersString) {
           const parsedDemoOrders = JSON.parse(demoOrdersString);
           const localOrders = parsedDemoOrders.filter(
-            (order) => order.user_id === user.id || order.user_id === 'demo-user-id'
+            (order: { user_id: string }) => order.user_id === user.id || order.user_id === 'demo-user-id'
           );
           
           if (localOrders.length > 0) {
@@ -77,7 +77,7 @@ const Orders = () => {
             
             // Check if an order with the same ID exists in finalOrders
             const uniqueLocalOrders = localOrders.filter(
-              (localOrder) => !finalOrders.some((order) => order.id === localOrder.id)
+              (localOrder: { id: string }) => !finalOrders.some((order) => order.id === localOrder.id)
             );
             
             // Merge orders - use spread to avoid mutating the arrays

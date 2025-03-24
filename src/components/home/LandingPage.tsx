@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { HiArrowRight, HiShoppingCart } from 'react-icons/hi'
-import { Product, getTopSellingProducts, getGamingProducts, getWorkstationProducts, getMiningProducts, getAIProducts, getFeaturedProducts, getSaleProducts } from '../../data/products'
+import { Product, getTopSellingProducts, getFeaturedProducts, getSaleProducts } from '../../data/products'
 import { useState, useEffect, useRef } from 'react'
 import { useCart } from '../../contexts/CartContext'
 import { nvidiaLogo, amdLogo, msiLogo, intelLogo, asusLogo, rogLogo, gigabyteLogo } from '../../assets/brandLogos/index'
@@ -8,7 +8,6 @@ import { hero1, hero2, hero3 } from '../../assets/heroSlides/index'
 import { ai, gaming, mining, workstation } from '../../assets/workloads/index'
 import { motion, useInView } from 'framer-motion'
 import { useCurrency } from '../../contexts/CurrencyContext'
-import { toast } from 'react-hot-toast'
 
 const workloads = [
   {

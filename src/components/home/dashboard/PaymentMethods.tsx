@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { HiCreditCard, HiPlus, HiPencil, HiTrash } from 'react-icons/hi';
-import { FaPaypal, FaMobile, FaMoneyBillWave, FaMoneyCheck } from 'react-icons/fa';
+import { FaPaypal, FaMobile, FaMoneyBillWave } from 'react-icons/fa';
 
 interface PaymentMethod {
   id: string;

@@ -13,7 +13,6 @@ const Login: React.FC<LoginProps> = ({ isRegister = false }) => {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isValidPassword, setIsValidPassword] = useState(true)
-  const [isAvailable, setIsAvailable] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [isLogin, setIsLogin] = useState(!isRegister)
@@ -36,7 +35,6 @@ const Login: React.FC<LoginProps> = ({ isRegister = false }) => {
           .single();
         
         if (profileData) {
-          setIsAvailable(false);
           setError('Email already exists');
           return;
         }
@@ -52,23 +50,19 @@ const Login: React.FC<LoginProps> = ({ isRegister = false }) => {
           
           if (error && error.message.includes('Invalid login credentials')) {
             // Email exists, but password is wrong (which is expected here)
-            setIsAvailable(false);
             setError('Email already exists');
           } else {
             // Any other error means email likely doesn't exist in auth
-            setIsAvailable(true);
             setError('');
           }
         } catch (signInError) {
           console.error('Error during availability check:', signInError);
           // Default to available if we can't determine
-          setIsAvailable(true);
           setError('');
         }
       } catch (err) {
         // If we get a "not found" error from profiles, that's good - email isn't registered
         if (err instanceof Error && err.message.includes('PGRST116')) {
-          setIsAvailable(true);
           setError('');
         } else {
           console.error('Error checking email:', err);

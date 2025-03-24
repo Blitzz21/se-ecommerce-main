@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { HiPlus, HiViewGrid, HiChartBar, HiShoppingCart, HiStar, HiCurrencyDollar, HiUsers, HiDatabase, HiX } from 'react-icons/hi';
+import { HiPlus, HiViewGrid, HiChartBar, HiShoppingCart, HiStar, HiCurrencyDollar, HiDatabase, HiX } from 'react-icons/hi';
 import { Helmet } from 'react-helmet-async';
 import { toast } from 'react-hot-toast';
 import { initDb, setAdmin, revokeAdmin } from '../../lib/dbInit';
@@ -27,14 +27,6 @@ interface OrderItem {
   revenue?: number;
 }
 
-// Interface for the user_roles data from Supabase
-interface UserRoleData {
-  user_id: string;
-  profiles: {
-    email: string | null;
-  } | null;
-}
-
 // Interface for order data
 interface OrderData {
   id: string;
@@ -48,7 +40,7 @@ interface OrderData {
 }
 
 const AdminDashboard = () => {
-  const { user, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState({
     totalProducts: 0,
@@ -200,7 +192,7 @@ const AdminDashboard = () => {
           // Aggregate by product_id
           const productSales: Record<string, any> = {};
           allOrderItems.forEach(item => {
-            const { product_id, product_name, quantity = 1, price = 0, revenue = 0 } = item;
+            const { product_id, product_name, quantity = 1, revenue = 0 } = item;
             if (!productSales[product_id]) {
               productSales[product_id] = { 
                 id: product_id, 

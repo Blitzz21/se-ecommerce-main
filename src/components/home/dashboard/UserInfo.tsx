@@ -99,14 +99,6 @@ export const UserInfo: React.FC<UserInfoProps> = ({ className = '' }) => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
   return (
     <div className={`bg-white shadow rounded-lg p-6 ${className}`}>
       <div className="flex justify-between items-center mb-4">

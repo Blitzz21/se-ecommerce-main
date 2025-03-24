@@ -1,6 +1,5 @@
 import { HiMinusSm, HiPlusSm, HiX } from 'react-icons/hi';
 import { Product } from '../../data/products';
-import { useCart } from '../../contexts/CartContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 
 interface CartItemProps {

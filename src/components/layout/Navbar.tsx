@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { HiMenu, HiX, HiShoppingCart, HiUser, HiChevronDown } from 'react-icons/hi'
 import { useCart } from '../../contexts/CartContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -12,7 +12,6 @@ export const Navbar = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const { cartItems } = useCart()
   const { user, signOut, isAdmin } = useAuth()
-  const navigate = useNavigate()
   const products = [
     ...getGamingProducts(),
     ...getWorkstationProducts(),

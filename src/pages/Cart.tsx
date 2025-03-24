@@ -20,7 +20,6 @@ const Cart = () => {
     updateQuantity, 
     toggleItemSelection, 
     selectAllItems,
-    selectedItemsTotal,
   } = useCart();
   const [products, setProducts] = useState<DatabaseProduct[]>([]);
   const [isSelectingAll, setIsSelectingAll] = useState(false);
@@ -97,8 +96,6 @@ const Cart = () => {
 
     await updateQuantity(itemId, newQuantity);
   };
-
-  const selectedCount = cartItems.filter(item => item.selected).length;
 
   if (cartItems.length === 0) {
     return <EmptyState message="Your cart is empty" />;

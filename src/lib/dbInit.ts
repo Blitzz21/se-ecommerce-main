@@ -132,13 +132,13 @@ export async function createAdminRole(userId: string) {
     }
     
     // Insert admin role directly
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('user_roles')
       .upsert({
         user_id: userId,
         role: 'admin',
         created_at: new Date().toISOString()
-      }, { onConflict: 'user_id,role' });
+      });
     
     if (error) {
       console.error('Error inserting admin role:', error);
