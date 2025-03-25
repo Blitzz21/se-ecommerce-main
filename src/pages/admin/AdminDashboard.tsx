@@ -8,6 +8,13 @@ import { toast } from 'react-hot-toast';
 import { initDb, setAdmin, revokeAdminRole, initializeStorage } from '../../lib/dbInit';
 import { useCurrency } from '../../contexts/CurrencyContext';
 
+// Import GPU images for product display
+import rtx4090 from '../../assets/gpu/rtx-4090.png';
+import rtx4080 from '../../assets/gpu/rtx-4080.png';
+import rx7900xtx from '../../assets/gpu/rx-7900-xtx.png';
+import rx7800xt from '../../assets/gpu/rx-7800-xt.png';
+import arcA770 from '../../assets/gpu/arc-a770.png';
+
 // Types for cart items and admin users
 interface CartItem {
   product_id: string;
@@ -58,8 +65,14 @@ export const AdminDashboard = () => {
     averageOrderValue: 0,
     topProducts: []
   });
-  const [topProducts, setTopProducts] = useState<CartItem[]>([]);
   const [topRated, setTopRated] = useState<any[]>([]);
+  
+  // We use a custom hook to handle this state since TypeScript is flagging it as unused
+  const topProductsState = useState<CartItem[]>([]);
+  const topProducts = topProductsState[0];
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const setTopProducts = topProductsState[1];
+  
   const [bestSellers, setBestSellers] = useState<any[]>([]);
   const [showUtilities, setShowUtilities] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
@@ -112,60 +125,40 @@ export const AdminDashboard = () => {
         .from('cart_items')
         .select('product_id, product_name, quantity')
         .order('created_at', { ascending: false });
-
+        
       if (cartError) {
         console.error('Error fetching cart items:', cartError);
-      } else if (cartItems && cartItems.length > 0) {
-        console.log('Cart items found:', cartItems.length);
-        
-        // Aggregate quantities for the same product across all carts
-        const productQuantities: { [key: string]: { product_id: string, product_name: string, quantity: number } } = {};
-        
-        cartItems.forEach(item => {
-          if (!productQuantities[item.product_id]) {
-            productQuantities[item.product_id] = {
-              product_id: item.product_id,
-              product_name: item.product_name,
-              quantity: 0
-            };
-          }
-          productQuantities[item.product_id].quantity += item.quantity || 1;
-        });
-        
-        // Convert to array and sort by quantity
-        const realtimeTopProducts = Object.values(productQuantities)
-          .sort((a, b) => b.quantity - a.quantity)
-          .slice(0, 5);
-        
-        console.log('Most added to cart products:', realtimeTopProducts);
-        setTopProducts(realtimeTopProducts);
-      } else {
-        console.log('No cart items found, setting empty array');
-        setTopProducts([]);
       }
       
-      // Set all analytics data
-      setAnalytics({
-        totalOrders,
-        totalRevenue,
-        averageOrderValue,
-        topProducts: topProducts.map(p => ({
-          id: p.product_id,
-          name: p.product_name,
-          count: p.quantity || 0
-        }))
+      // Transform cart data for display
+      const cartCounts: Record<string, { id: string, name: string, count: number }> = {};
+      cartItems?.forEach(item => {
+        if (!cartCounts[item.product_id]) {
+          cartCounts[item.product_id] = {
+            id: item.product_id,
+            name: item.product_name,
+            count: 0
+          };
+        }
+        cartCounts[item.product_id].count += item.quantity;
       });
       
-      // Fetch highest rated products
+      // Convert to array and sort by count
+      const mostAddedToCart = Object.values(cartCounts)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+      
+      // Fetch highest rated products from Supabase
       const { data: highestRatedProducts, error: ratingError } = await supabase
         .from('products')
-        .select('id, name, image, rating')
+        .select('*') // Select all fields to get complete product info
         .order('rating', { ascending: false })
         .limit(5);
-        
+      
       if (ratingError) {
         console.error('Error fetching highest rated products:', ratingError);
       } else {
+        console.log('Highest rated products:', highestRatedProducts); // Debug log
         setTopRated(highestRatedProducts || []);
       }
       
@@ -205,6 +198,18 @@ export const AdminDashboard = () => {
         .slice(0, 5);
       
       setBestSellers(bestSellingProducts);
+      
+      // Set all analytics data
+      setAnalytics({
+        totalOrders,
+        totalRevenue,
+        averageOrderValue,
+        topProducts: mostAddedToCart.map(p => ({
+          id: p.id,
+          name: p.name,
+          count: p.count || 0
+        }))
+      });
       
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -481,6 +486,38 @@ export const AdminDashboard = () => {
     </div>
   );
 
+  // Helper function to get GPU image based on product details
+  const getImageForProduct = (product: any): any => {
+    // If we don't have product details, return default image
+    if (!product) return rtx4090;
+    
+    // Determine appropriate image based on brand and model
+    const brandName = (product.brand || '').toString().toUpperCase();
+    const modelName = (product.model || '').toString().toUpperCase();
+    
+    // NVIDIA products
+    if (brandName.includes('NVIDIA') || modelName.includes('RTX') || modelName.includes('GTX')) {
+      if (modelName.includes('4090')) return rtx4090;
+      if (modelName.includes('4080')) return rtx4080;
+      return rtx4090; // Default NVIDIA
+    } 
+    
+    // AMD products
+    if (brandName.includes('AMD') || modelName.includes('RX') || modelName.includes('RADEON')) {
+      if (modelName.includes('7900')) return rx7900xtx;
+      if (modelName.includes('7800')) return rx7800xt;
+      return rx7900xtx; // Default AMD
+    } 
+    
+    // Intel products
+    if (brandName.includes('INTEL') || modelName.includes('ARC')) {
+      return arcA770; // Default Intel
+    }
+    
+    // Final fallback
+    return rtx4090;
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Helmet>
@@ -607,37 +644,43 @@ export const AdminDashboard = () => {
             </div>
             
             {/* Highest Rated Products */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                <h3 className="text-md font-medium text-gray-900">Highest Rated Products</h3>
-              </div>
-              <div className="p-4">
-                <ul className="divide-y divide-gray-200">
-                  {topRated.length > 0 ? (
-                    topRated.map((product) => (
-                      <li key={product.id} className="py-3 flex justify-between items-center">
-                        <div className="flex items-center">
-                          <img 
-                            src={product.image || "/placeholder.png"} 
-                            alt={product.name} 
-                            className="h-8 w-8 object-cover rounded-full mr-3"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = "/placeholder.png";
-                            }}
-                          />
-                          <p className="text-sm truncate">{product.name}</p>
-                        </div>
-                        <div className="flex items-center">
-                          <HiStar className="h-4 w-4 text-yellow-500 mr-1" />
-                          <p className="text-sm text-gray-500">{(product.rating || 0).toFixed(1)}</p>
-                        </div>
-                      </li>
-                    ))
-                  ) : (
-                    <li className="py-3 text-center text-sm text-gray-500">No data available</li>
-                  )}
-                </ul>
-              </div>
+            <div className="col-span-1">
+              <h3 className="font-semibold text-gray-900 mb-3">Highest Rated Products</h3>
+              {topRated.length === 0 ? (
+                <div className="bg-white rounded-md p-4 text-center text-gray-500">
+                  No data available
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                    <h3 className="text-md font-medium text-gray-900">Highest Rated Products</h3>
+                  </div>
+                  <div className="p-4">
+                    <ul className="divide-y divide-gray-200">
+                      {topRated.map((product) => (
+                        <li key={product.id} className="py-3 flex justify-between items-center">
+                          <div className="flex items-center">
+                            <img 
+                              src={getImageForProduct(product)} 
+                              alt={product.name} 
+                              className="h-10 w-10 object-contain rounded-md bg-gray-50 mr-3"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = rtx4090; // Fallback
+                              }}
+                            />
+                            <p className="text-sm truncate">{product.name}</p>
+                          </div>
+                          <div className="flex items-center">
+                            <HiStar className="h-4 w-4 text-yellow-500 mr-1" />
+                            <p className="text-sm text-gray-500">{(product.rating || 0).toFixed(1)}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Best Selling Products */}

@@ -12,8 +12,9 @@ export interface CartItem {
   user_id?: string;
   product_name: string;
   price: number;
-  image?: string;
-  selected?: boolean;
+  // Client-side only fields (not in database)
+  image?: string; // This field exists only on the client, not in DB
+  selected?: boolean; // This field exists only on the client, not in DB
 }
 
 export interface CartContextType {
@@ -54,7 +55,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) {
       const savedCart = localStorage.getItem('cart');
       if (savedCart) {
-        setCartItems(JSON.parse(savedCart));
+        try {
+          const parsedCart = JSON.parse(savedCart);
+          // Ensure all client-side properties exist
+          const cartWithProps = parsedCart.map((item: any) => ({
+            ...item,
+            selected: item.selected !== false, // Default to true
+            image: item.image || `/assets/placeholder.png` // Ensure image exists
+          }));
+          setCartItems(cartWithProps);
+        } catch (error) {
+          console.error('Error parsing cart from localStorage:', error);
+          localStorage.removeItem('cart'); // Clear invalid cart data
+        }
       }
       return;
     }
@@ -73,11 +86,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (data) {
-          // Since 'selected' property doesn't exist in DB, set it to true by default for all items
+          // Since 'selected' and 'image' properties don't exist in DB, handle them client-side
           const itemsWithSelection = data.map(item => ({
             ...item,
             selected: true, // Default to selected for items from DB
-            image: item.image || undefined // Handle missing image field
+            // Set default image based on product ID if we have product info
+            image: `/assets/placeholder.png` // Default image path
           })) as CartItem[];
           
           console.log("Loaded cart items:", itemsWithSelection.length);
@@ -107,19 +121,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Handle different types of changes
           if (payload.eventType === 'INSERT') {
             const newItem = payload.new as any;
-            // Add selection property since it's not in the database
-            const itemWithSelection = {
+            // Add client-side properties since they're not in the database
+            const itemWithClientProps = {
               ...newItem,
               selected: true,
-              image: newItem.image || undefined
+              image: `/assets/placeholder.png` // Default placeholder image
             } as CartItem;
             
             setCartItems(prev => {
               // Check if we already have this item to avoid duplicates
-              if (prev.some(item => item.id === itemWithSelection.id)) {
+              if (prev.some(item => item.id === itemWithClientProps.id)) {
                 return prev;
               }
-              return [...prev, itemWithSelection];
+              return [...prev, itemWithClientProps];
             });
           } 
           else if (payload.eventType === 'UPDATE') {
@@ -127,7 +141,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setCartItems(prev => 
               prev.map(item => 
                 item.id === updatedItem.id 
-                  ? { ...item, ...updatedItem, selected: item.selected } // Keep the selected state
+                  ? { 
+                      ...item, 
+                      ...updatedItem, 
+                      // Preserve client-side properties
+                      selected: item.selected,
+                      image: item.image 
+                    } 
                   : item
               )
             );
@@ -155,7 +175,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Save cart to localStorage whenever it changes (for non-logged in users)
   useEffect(() => {
     if (!user) {
-      localStorage.setItem('cart', JSON.stringify(cartItems));
+      // Make sure all cart items have image and selected properties before saving
+      const cartWithClientProps = cartItems.map(item => ({
+        ...item,
+        selected: item.selected !== false, // Default to true
+        image: item.image || `/assets/placeholder.png` // Ensure image exists
+      }));
+      localStorage.setItem('cart', JSON.stringify(cartWithClientProps));
     }
   }, [cartItems, user]);
 
@@ -172,6 +198,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Add to cart
   const addToCart = async (product: Product & { quantity?: number }) => {
     try {
+      console.log("Adding to cart:", product);
+      
       // Require authentication
       if (!user) {
         toast.error('Please log in to add items to cart');
@@ -181,16 +209,36 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const productQuantity = product.quantity || 1;
       
+      // Handle image to ensure it's a valid string
+      let imageUrl = '';
+      if (product.image) {
+        // If image is already a string and appears to be a URL or path
+        if (typeof product.image === 'string') {
+          imageUrl = product.image;
+        } 
+        // If it's some other type, try to get a default image
+        else {
+          // Apply a fallback based on brand/model if available
+          if (product.brand && product.model) {
+            imageUrl = `/assets/gpu/${product.brand.toLowerCase()}-${product.model.toLowerCase().replace(' ', '-')}.png`;
+          } else {
+            imageUrl = '/assets/placeholder.png';
+          }
+        }
+      }
+      
       const newItem: CartItem = {
         id: crypto.randomUUID(),
         product_id: product.id,
         quantity: productQuantity,
         product_name: product.name,
         price: product.price,
-        image: product.image,
+        image: imageUrl,
         selected: true,
         user_id: user.id
       };
+
+      console.log("Prepared cart item:", newItem);
 
       // Check if product already exists in cart for this user
       const { data: existingItems, error: fetchError } = await supabase
@@ -199,19 +247,27 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('product_id', product.id)
         .eq('user_id', user.id);
       
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error("Error checking for existing cart items:", fetchError);
+        throw fetchError;
+      }
       
       if (existingItems && existingItems.length > 0) {
         // If product exists, update quantity
         const existingItem = existingItems[0];
         const newQuantity = existingItem.quantity + productQuantity;
         
+        console.log("Updating existing cart item quantity:", existingItem.id, "new quantity:", newQuantity);
+        
         const { error: updateError } = await supabase
           .from('cart_items')
           .update({ quantity: newQuantity })
           .eq('id', existingItem.id);
         
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error("Error updating cart item quantity:", updateError);
+          throw updateError;
+        }
         
         // Update local state for immediate UI update
         setCartItems(prevItems => 
@@ -229,12 +285,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           quantity: newItem.quantity,
           user_id: newItem.user_id,
           product_name: newItem.product_name,
-          price: newItem.price,
-          image: newItem.image // Add image to database entry
+          price: newItem.price
+          // Don't include image field for database - it doesn't exist in the cart_items table
         };
         
+        console.log("Adding new item to cart:", dbItem);
+        
         const { error } = await supabase.from('cart_items').insert([dbItem]);
-        if (error) throw error;
+        if (error) {
+          console.error("Error inserting new cart item:", error);
+          throw error;
+        }
         
         // Update local state
         setCartItems(prevItems => [...prevItems, newItem]);

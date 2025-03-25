@@ -322,7 +322,13 @@ export const LandingPage = () => {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        addToCart(product);
+                        // Create a proper cart item with string URL for image
+                        const productForCart = {
+                          ...product,
+                          // Ensure image is a string URL, not an imported module
+                          image: typeof product.image === 'string' ? product.image : `/assets/gpu/${product.brand.toLowerCase()}-${product.model.toLowerCase().replace(' ', '-')}.png`
+                        };
+                        addToCart(productForCart);
                       }}
                       className="absolute bottom-4 right-4 bg-green-500 hover:bg-green-600 text-white rounded-full p-3 shadow-lg transform transition-transform hover:scale-110 z-10"
                       aria-label="Add to cart"

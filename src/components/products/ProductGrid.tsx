@@ -302,11 +302,17 @@ const ProductGrid = ({ products }: ProductGridProps) => {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  addToCart({
+                  // Make sure the image is a valid string URL
+                  const productForCart = {
                     ...product,
                     badge: product.badge,
-                    sale: product.sale
-                  });
+                    sale: product.sale,
+                    // Ensure image is a valid URL string
+                    image: typeof product.image === 'string' 
+                      ? product.image 
+                      : `/assets/gpu/${product.brand.toLowerCase()}-${product.model.toLowerCase().replace(' ', '-')}.png`
+                  };
+                  addToCart(productForCart);
                 }}
                 className="absolute bottom-4 right-4 bg-green-500 hover:bg-green-600 text-white rounded-full p-3 shadow-lg transform transition-transform hover:scale-110 z-10"
                 aria-label="Add to cart"

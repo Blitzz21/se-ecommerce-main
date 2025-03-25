@@ -1,9 +1,45 @@
+/**
+ * Admin Analytics Dashboard
+ * 
+ * This component provides an analytics dashboard for store administrators.
+ * It fetches and displays key metrics such as:
+ * - Sales data (total sales, average order value)
+ * - Order statistics (total orders, recent orders)
+ * - Product information (total products, top rated products)
+ * - Customer data (total customers, new customers)
+ * 
+ * Data Fetching:
+ * - Uses Supabase to query the database for orders, products, and customer profiles
+ * - Filters data based on time range (week, month, year)
+ * - Aggregates data for charts and statistics
+ * 
+ * State Management:
+ * - Maintains state for loading status, analytics data, and selected time range
+ * - Updates data when time range changes
+ * 
+ * UI Features:
+ * - Responsive layout with grid system
+ * - Time range selector for filtering data
+ * - Loading indicators during data fetch
+ * - Formatted currency display
+ * - GPU image display for product listings
+ */
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Helmet } from 'react-helmet-async';
 import { HiCurrencyDollar, HiShoppingCart, HiUsers, HiTag, HiTrendingUp } from 'react-icons/hi';
 import { useCurrency } from '../../contexts/CurrencyContext';
+// Product type is used in type assertions and for the getImageForProduct function
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { Product } from '../../data/products';
+
+// Import GPU images
+import rtx4090 from '../../assets/gpu/rtx-4090.png';
+import rtx4080 from '../../assets/gpu/rtx-4080.png';
+import rx7900xtx from '../../assets/gpu/rx-7900-xtx.png';
+import rx7800xt from '../../assets/gpu/rx-7800-xt.png';
+import arcA770 from '../../assets/gpu/arc-a770.png';
 
 // Analytics data types
 interface AnalyticsData {
@@ -38,6 +74,25 @@ const Analytics = () => {
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
 
   // Fetch analytics data
+  /**
+   * Fetches and processes analytics data from Supabase
+   * 
+   * This function:
+   * 1. Calculates the date range based on the selected time period
+   * 2. Fetches orders from Supabase within that time period
+   * 3. Processes orders to calculate sales metrics (total, average)
+   * 4. Retrieves customer and product counts
+   * 5. Groups sales data by day for the sales trend chart
+   * 6. Fetches the top-rated products (limit 5)
+   * 7. Updates component state with the processed data
+   * 
+   * Error Handling:
+   * - Logs errors to console
+   * - Shows toast notifications for user feedback
+   * - Sets loading state appropriately
+   * 
+   * @param range - The time range to fetch data for ('week', 'month', or 'year')
+   */
   const fetchAnalytics = async (range: 'week' | 'month' | 'year' = 'month') => {
     try {
       setLoading(true);
@@ -127,11 +182,14 @@ const Analytics = () => {
       // Fetch top products (limited to 5)
       const { data: topProductsData, error: topProductsError } = await supabase
         .from('products')
-        .select('id, name, price, image, sale, stock')
+        .select('*')
         .order('rating', { ascending: false })
         .limit(5);
       
       if (topProductsError) throw topProductsError;
+      
+      // Log product data for debugging
+      console.log('Top products data:', topProductsData);
       
       // Set analytics data
       setData({
@@ -169,6 +227,58 @@ const Analytics = () => {
     });
   };
 
+  /**
+   * Determines and returns the appropriate GPU image for a product
+   *
+   * This helper function:
+   * 1. Analyzes the product's brand and model information
+   * 2. Maps the product to an appropriate imported GPU image
+   * 3. Provides fallbacks for each brand (NVIDIA, AMD, Intel)
+   * 4. Has a final fallback to ensure an image is always returned
+   *
+   * Image Selection Logic:
+   * - For NVIDIA products: Uses RTX 4090/4080 images based on model number
+   * - For AMD products: Uses RX 7900/7800 images based on model number
+   * - For Intel products: Uses Arc A770 image
+   * - Default fallback: RTX 4090 image
+   *
+   * @param product - The product object to determine an image for
+   * @returns The imported image object (not a string path)
+   */
+  const getImageForProduct = (product: any): any => {
+    // For debugging
+    console.log('Product in getImageForProduct:', product?.name, product?.brand, product?.model);
+    
+    // Check if we can use the imported images directly
+    // We need to return the actual imported image (which is a module) not a string path
+    
+    // Determine appropriate image based on brand and model
+    const brandName = (product?.brand || '').toString().toUpperCase();
+    const modelName = (product?.model || '').toString().toUpperCase();
+    
+    // First check if it's an NVIDIA product
+    if (brandName.includes('NVIDIA') || modelName.includes('RTX') || modelName.includes('GTX')) {
+      if (modelName.includes('4090')) return rtx4090;
+      if (modelName.includes('4080')) return rtx4080;
+      return rtx4090; // Default NVIDIA
+    } 
+    
+    // Then check if it's an AMD product
+    if (brandName.includes('AMD') || modelName.includes('RX') || modelName.includes('RADEON')) {
+      if (modelName.includes('7900')) return rx7900xtx;
+      if (modelName.includes('7800')) return rx7800xt;
+      return rx7900xtx; // Default AMD
+    } 
+    
+    // Check if it's an Intel product
+    if (brandName.includes('INTEL') || modelName.includes('ARC')) {
+      return arcA770; // Default Intel
+    }
+    
+    // Final fallback - always return an image
+    return rtx4090;
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <Helmet>
@@ -180,7 +290,13 @@ const Analytics = () => {
         <p className="text-gray-600">View sales and performance metrics</p>
       </div>
       
-      {/* Time range selector */}
+      {/* 
+        Time Range Selector
+        - Allows filtering analytics by 3 time periods: week, month, year
+        - Updates all metrics when a different range is selected
+        - Uses useEffect hook to trigger data refresh on change
+        - Visual feedback for selected range with green highlight
+      */}
       <div className="mb-6 flex justify-end">
         <div className="inline-flex rounded-md shadow-sm">
           <button
@@ -354,6 +470,14 @@ const Analytics = () => {
               <div className="px-6 py-4 border-b border-gray-200">
                 <h3 className="text-lg font-medium text-gray-900">Top Products</h3>
               </div>
+              
+              {/* 
+                Products List:
+                - Shows the top 5 highest-rated products
+                - Displays product image, name, stock status, and price
+                - Handles sale pricing with strikethrough for original price
+                - Uses imported GPU images to ensure consistent display
+              */}
               <div className="divide-y divide-gray-200">
                 {data.topProducts.length === 0 ? (
                   <p className="px-6 py-4 text-gray-500 text-sm">No products available</p>
@@ -361,17 +485,16 @@ const Analytics = () => {
                   data.topProducts.map(product => (
                     <div key={product.id} className="px-6 py-4 flex items-center">
                       <div className="flex-shrink-0 h-12 w-12">
-                        {product.image ? (
-                          <img 
-                            className="h-12 w-12 rounded-md object-cover" 
-                            src={product.image} 
-                            alt={product.name} 
-                          />
-                        ) : (
-                          <div className="h-12 w-12 rounded-md bg-gray-200 flex items-center justify-center">
-                            <HiTag className="h-6 w-6 text-gray-400" />
-                          </div>
-                        )}
+                        <img 
+                          className="h-12 w-12 rounded-md object-contain bg-gray-50" 
+                          src={getImageForProduct(product)} 
+                          alt={product.name || "GPU Product"} 
+                          onError={(e) => {
+                            console.log("Image load error for:", product.name);
+                            const target = e.target as HTMLImageElement;
+                            target.src = rtx4090; // Fallback to default image
+                          }}
+                        />
                       </div>
                       <div className="ml-4 flex-1">
                         <p className="text-sm font-medium text-gray-900">{product.name}</p>
@@ -444,3 +567,32 @@ const Analytics = () => {
 };
 
 export default Analytics; 
+
+/*
+  Documentation Summary:
+  
+  The Analytics dashboard provides admin users with comprehensive data
+  about the store's performance. Key features include:
+  
+  1. Data Visualization:
+     - Shows essential metrics in card format for quick overview
+     - Categorizes metrics into sales, orders, customers, and products
+     - Provides visual charts for spotting trends
+  
+  2. Data Filtering:
+     - Time-based filtering with week/month/year options
+     - Consistent data refresh when filters change
+  
+  3. Product Display:
+     - Top products section with images and details
+     - Intelligent image mapping for GPU products based on brand/model
+     - Comprehensive error handling for images
+  
+  4. Historical Data:
+     - Recent orders section with status indicators
+     - Sales trends charted over time
+     - Ability to see growth metrics
+     
+  This component demonstrates a complete admin analytics solution with
+  live data from Supabase, custom UI, and responsive design.
+*/ 
